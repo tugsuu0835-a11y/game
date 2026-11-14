@@ -1,0 +1,1145 @@
+<!doctype html>
+<html lang="mn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Сүнсний зам</title>
+<style>
+[hidden]{display:none!important}
+body{margin:0;background:radial-gradient(circle at 50% 0%,#2a1d3d,#0d0817 75%);color:#f3e7d3;font-family:Georgia,"Times New Roman",serif;min-height:100vh}
+header h1{margin:10px 0;text-align:center;color:#ff8a1f;text-shadow:0 0 14px #ff8a1f88;font-weight:normal;letter-spacing:2px}
+
+.panel{max-width:480px;margin:30px auto;padding:20px;background:#1a1328ee;border:1px solid #6b5a86;border-radius:14px;box-shadow:0 0 30px #00000088}
+#avatars{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:8px 0}
+.av{background:#2a2238;border:2px solid #6b5a86;border-radius:12px;padding:4px;cursor:pointer;margin:0}
+.av.sel{border-color:#ff8a1f;box-shadow:0 0 10px #ff8a1f}
+.av canvas{display:block}
+#joinRow{display:flex;gap:8px;margin:8px 0}
+#joinRow input{flex:1;padding:9px;background:#120c1c;color:#f3e7d3;border:1px solid #6b5a86;border-radius:8px;font:15px Georgia,serif}
+#err{color:#ff8a1f;min-height:1.2em}
+
+button{background:#ff8a1f;color:#140f1f;border:0;border-radius:10px;padding:10px 16px;font:bold 15px Georgia,serif;cursor:pointer;margin:6px 4px 0 0}
+button:disabled{opacity:.4;cursor:not-allowed}
+
+main{display:grid;grid-template-columns:1fr 270px;gap:12px;padding:12px;max-width:1300px;margin:0 auto}
+#boardWrap{height:80vh;overflow:auto;border:1px solid #6b5a86;border-radius:14px;background:#0d0817}
+#board{display:block}
+aside{background:#1a1328ee;border:1px solid #6b5a86;border-radius:14px;padding:12px}
+
+.pl{padding:5px 8px;margin:4px 0;border-radius:8px;background:#0000002e;font-size:14px}
+.pl.cur{outline:2px dashed #ff8a1f}
+.pl i{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:6px;border:1px solid #000;vertical-align:middle}
+#dice{display:flex;gap:8px;justify-content:center;margin:10px 0;min-height:84px}
+#message{min-height:3em;text-align:center;font-size:16px;margin:8px 0}
+
+#modal{position:fixed;inset:0;background:#000000cc;display:flex;align-items:center;justify-content:center;padding:12px;z-index:5}
+#modal .box{background:#1a1328;border:2px solid #ff8a1f;border-radius:14px;padding:20px;max-width:460px;width:100%;box-shadow:0 0 40px #ff8a1f55}
+#qOpts button{display:block;width:100%;text-align:left;background:#2a2238;color:#f3e7d3;border:1px solid #6b5a86;margin:6px 0}
+
+@media (max-width:800px){
+  main{grid-template-columns:1fr}
+  #boardWrap{height:60vh}
+}
+</style>
+</head>
+<body>
+<header><h1>Сүнсний зам</h1></header>
+
+<!-- ЛОББИ -->
+<section id="lobby" class="panel">
+  <p>Өрөөний код: <b id="roomCode"></b> · <button id="copyBtn">Линк хуулах</button></p>
+  <p>Дүрээ сонгоно уу:</p>
+  <div id="avatars"></div>
+  <div id="joinRow">
+    <input id="nameIn" maxlength="12" placeholder="Таны нэр">
+    <button id="joinBtn">Нэгдэх</button>
+  </div>
+  <p>Тоглогчид:</p>
+  <div id="lobbyPlayers"></div>
+  <button id="startBtn" hidden>Тоглоом эхлүүлэх</button>
+  <p id="err"></p>
+</section>
+
+<!-- ТОГЛОО -->
+<main id="game" hidden>
+  <div id="boardWrap"><canvas id="board"></canvas></div>
+  <aside>
+    <div id="players"></div>
+    <div id="dice"></div>
+    <div id="message"></div>
+    <button id="rollBtn">Шоо хаях</button>
+    <button id="restartBtn" hidden>Дахин тоглох</button>
+    <button id="muteBtn">Дуу: асаалттай</button>
+  </aside>
+</main>
+
+<!-- АСУУЛТ -->
+<div id="modal" hidden>
+  <div class="box">
+    <h2>Шийтгэлийн асуулт</h2>
+    <p id="qText"></p>
+    <div id="qOpts"></div>
+    <p id="qWait"></p>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+// ===== ОНЛАЙН ТОХИРГОО =====
+// Firebase-ийн үнэгүй төслөөс авсан утгаа энд буулгана (заавар: README хэсэг).
+// Хоосон үлдвэл тоглоом нэг компьютер дээр ээлжээр тоглох горимд ажиллана.
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSy...",
+  authDomain: "suns-zam.firebaseapp.com",
+  databaseURL: "https://suns-zam-xxxxx-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "suns-zam",
+  storageBucket: "suns-zam.firebasestorage.app",
+  messagingSenderId: "...",
+  appId: "1:...:web:..."
+};
+
+// a = зөв хариултын индекс (0 = А, 1 = Б, 2 = В, 3 = Г)
+const QUESTIONS = [
+  { q: 'Хүн хэдэн шүдтэй вэ?', o: ['32 шүдтэй', '35 шүдтэй', 'Шүдгүй', 'Соёотой'], a: 0 },
+  { q: 'Араг яс хаана байдаг вэ?', o: ['Газар дор', 'Амьтан, хүнд', 'Араатан амьтны ходоодонд', 'Булшинд'], a: 1 },
+  { q: 'Halloween-ыг яагаад тэмдэглэдэг вэ?', o: ['Хөгжилдөх гэж', 'Айдас мэдрэх гэж', 'Сүнс зайлуулах гэж', 'Сүнстэй адилхан болох гэж'], a: 3 },
+  { q: 'Сэндэр эмээ хэнд хайртай байсан бэ?', o: ['Хүүдээ', 'Надад', 'Охиндоо', 'Нөхөртөө'], a: 1 },
+  { q: 'Halloween-д яагаад хулуу хэрэглэдэг вэ?', o: ['Айдас төрүүлэх гэж', 'Идэх гэж', 'Шахааны бизнес', 'Олдсон нь тэр'], a: 2 },
+  { q: 'Halloween-ийн уламжлал хаанаас гаралтай вэ?', o: ['Келтийн Samhain баяр', 'Египетийн баяр', 'Японы баяр', 'Ромын баяр'], a: 0 },
+  { q: 'Хулууг Halloween-д юу хийж гэрэлтүүлдэг вэ?', o: ['Хөргөдөг', 'Сийж, дотор нь лаа тавьдаг', 'Хатааж идэх', 'Усанд хөвүүлдэг'], a: 1 },
+  { q: 'Хэллоуины үеэр уран зургийн дүрд ихэвчлэн ямар амьтан гардаг вэ?', o: ['Хар муур', 'Цагаан туулай', 'Заан', 'Тоть'], a: 0 },
+  { q: 'Дракулагийн домог ямар оронтой холбоотой вэ?', o: ['Франц', 'Трансильвани', 'Египет', 'Япон'], a: 1 },
+  { q: 'Франкенштейн романыг хэн бичсэн бэ?', o: ['Брэм Стокер', 'Мэри Шелли', 'Эдгар По', 'Льюис Кэрролл'], a: 1 },
+  { q: 'Жак-о\'-лантерн гэдэг хулуу ямар уламжлалаас гаралтай вэ?', o: ['Ирланд', 'Норвеги', 'Перу', 'Мадагаскар'], a: 0 },
+  { q: 'Halloween хэдэн сарын хэдэнд тохиодог вэ?', o: ['10-р сарын 31', '11-р сарын 1', '9-р сарын 30', '12-р сарын 25'], a: 0 },
+  { q: 'Хүүхдүүд Halloween-д "Trick or treat" гэж юу гуйдаг вэ?', o: ['Мөнгө', 'Амттан', 'Машин', 'Гутал'], a: 1 },
+  { q: 'Вампирын сул тал гэж уламжлалт итгэлээр юу байдаг вэ?', o: ['Сармис', 'Чихэр', 'Хөгжим', 'Нөмөр'], a: 0 },
+  { q: 'Сарьсан багваахай ихэвчлэн юу иддэг вэ?', o: ['Мах', 'Шавьж', 'Үр тариа', 'Ургамал'], a: 1 },
+  { q: 'Хүний биеийн хамгийн том эрхтэн аль нь вэ?', o: ['Элэг', 'Арьс', 'Ходоод', 'Тархи'], a: 1 },
+  { q: 'Хүнд ойролцоогоор хэдэн яс байдаг вэ?', o: ['106', '206', '306', '506'], a: 1 },
+  { q: 'Хүний зүрх минутанд ойролцоогоор хэдэн удаа цохилдог вэ?', o: ['20', '70', '200', '500'], a: 1 },
+  { q: 'Ус далайн түвшинд хэдэн градусд буцалдаг вэ?', o: ['50', '100', '150', '200'], a: 1 },
+  { q: 'Нарны аймгийн хамгийн том гариг аль нь вэ?', o: ['Бархасбадь', 'Санчир', 'Дэлхий', 'Ангараг'], a: 0 },
+  { q: 'Монгол Улсын нийслэл аль нь вэ?', o: ['Дархан', 'Улаанбаатар', 'Эрдэнэт', 'Чойбалсан'], a: 1 },
+  { q: '"Жаавс" киноны аймшигт дүр ямар амьтан вэ?', o: ['Загас (шүрхүй)', 'Арслан', 'Чоно', 'Баавгай'], a: 0 },
+  { q: 'Нэг жилд хэдэн сар байдаг вэ?', o: ['10', '12', '14', '16'], a: 1 },
+  { q: 'Аймшгийн гарал үүслийн тухай домгийн ид шидтэй баяруудын нэг нь аль нь вэ?', o: ['Samhain', 'Naadam', 'Tsagaan Sar', 'Easter'], a: 0 }
+];
+
+// Талбай: 1000 нүд, муруй зам. Seed тогтмол тул бүх тоглогч адил талбай харна.
+const TOTAL = 1000;
+const LAST = TOTAL - 1;
+const WORLD = { w: 1100, h: 2950 };
+
+// Нүдний төрөл — нийт 100%: 50% хоосон, 50% шагнал/шийтгэл
+const KIND_WEIGHTS = [
+  ['plain', 50],
+  ['fwd4', 6],    // шагнал: 4 нүд урагшлана
+  ['fwd5', 6],    // шагнал: 5 нүд урагшлана
+  ['roll', 8],    // шагнал: дахин шоо хаяна
+  ['back2', 8],   // шийтгэл: асуулттай, буруу бол 3 нүд ухрана
+  ['back3', 8],   // шийтгэл: асуулттай, буруу бол 3 нүд ухрана
+  ['jail', 14]    // шийтгэл: гяндан — асуултгүй, нэг тойрог өнжөөд суллагдана
+];
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = t + Math.imul(t ^ (t >>> 7), 61 | t) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function makeKinds() {
+  const r = mulberry32(2026);
+  const out = [];
+  for (let i = 0; i < TOTAL; i++) {
+    const u = r() * 100;
+    let acc = 0, kind = 'plain';
+    for (const [k, w] of KIND_WEIGHTS) {
+      acc += w;
+      if (u < acc) { kind = k; break; }
+    }
+    out.push(kind);
+  }
+  out[0] = 'plain';
+  out[LAST] = 'plain';
+  return out;
+}
+
+// Зигзаг замын хяналтын цэгүүд
+function makeControlPoints() {
+  const ROWS = 24, COLS = 9, X0 = 80, X1 = 1020, Y0 = 90, DY = 115;
+  const ctrl = [];
+  for (let r = 0; r < ROWS; r++) {
+    for (let k = 0; k < COLS; k++) {
+      const t = k / (COLS - 1);
+      const x = r % 2 === 0 ? X0 + t * (X1 - X0) : X1 - t * (X1 - X0);
+      const y = Y0 + r * DY + 28 * Math.sin(k * 1.2 + r * 0.7);
+      ctrl.push([x, y]);
+    }
+  }
+  return ctrl;
+}
+
+function catmull(p0, p1, p2, p3, t) {
+  const t2 = t * t, t3 = t2 * t;
+  return 0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (-p0 + 3 * p1 - 3 * p2 + p3) * t3);
+}
+
+function buildPath() {
+  const ctrl = makeControlPoints();
+  const dense = [];
+  for (let j = 0; j < ctrl.length - 1; j++) {
+    const p0 = ctrl[Math.max(j - 1, 0)], p1 = ctrl[j];
+    const p2 = ctrl[j + 1], p3 = ctrl[Math.min(j + 2, ctrl.length - 1)];
+    for (let s = 0; s < 30; s++) {
+      const t = s / 30;
+      dense.push([catmull(p0[0], p1[0], p2[0], p3[0], t), catmull(p0[1], p1[1], p2[1], p3[1], t)]);
+    }
+  }
+  dense.push(ctrl[ctrl.length - 1]);
+
+  const cum = [0];
+  for (let i = 1; i < dense.length; i++) {
+    cum.push(cum[i - 1] + Math.hypot(dense[i][0] - dense[i - 1][0], dense[i][1] - dense[i - 1][1]));
+  }
+  const L = cum[cum.length - 1];
+
+  const pts = [];
+  let j = 0;
+  for (let i = 0; i <= LAST; i++) {
+    const d = i * L / LAST;
+    while (j < dense.length - 2 && cum[j + 1] < d) j++;
+    const seg = (cum[j + 1] - cum[j]) || 1;
+    const f = (d - cum[j]) / seg;
+    pts.push({
+      x: dense[j][0] + (dense[j + 1][0] - dense[j][0]) * f,
+      y: dense[j][1] + (dense[j + 1][1] - dense[j][1]) * f
+    });
+  }
+  return pts;
+}
+
+// Замын хажуугийн чимэглэл — талбайн хоосон зайг дүүргэнэ (art.js-ийн дүрс)
+const FILL_TYPES = [
+  'house', 'house', 'church', 'tomb', 'tomb', 'tomb', 'tree', 'tree', 'pumpkin', 'pumpkin',
+  'ghost', 'bat', 'web', 'well', 'candle', 'cat', 'coffin', 'cauldron', 'cross', 'cross',
+  'zombie', 'skeleton', 'witch', 'vampire'
+];
+
+function buildFill(pts) {
+  const r = mulberry32(91);
+  const out = [];
+  const STEP = 42;
+  for (let gy = 20; gy < WORLD.h - 20; gy += STEP) {
+    for (let gx = 20; gx < WORLD.w - 20; gx += STEP) {
+      if (r() < 0.2) continue;
+      const x = gx + (r() - 0.5) * 16;
+      const y = gy + (r() - 0.5) * 16;
+      let md = Infinity;
+      for (let i = 0; i < pts.length; i += 2) {
+        const dx = pts[i].x - x, dy = pts[i].y - y;
+        const d = dx * dx + dy * dy;
+        if (d < md) md = d;
+      }
+      if (Math.sqrt(md) < 42) continue;
+      const t = FILL_TYPES[Math.floor(r() * FILL_TYPES.length)];
+      out.push({ x, y, t, s: 0.9 + r() * 0.5 });
+    }
+  }
+  return out;
+}
+
+// Мананы бүрхэг (fog) дүрсүүд
+const FOG = (() => {
+  const r = mulberry32(5);
+  const a = [];
+  for (let i = 0; i < 12; i++) a.push({ x: r() * WORLD.w, y: r() * WORLD.h, r: 150 + r() * 200 });
+  return a;
+})();
+
+const BOARD_PTS = buildPath();
+const BOARD_KINDS = makeKinds();
+const BOARD_FILL = buildFill(BOARD_PTS);
+
+// Бүх дүрсийг canvas-ийн хэлбэрүүдээр зурна (эможи ашиглахгүй).
+// Суурь (x, y) нь объектын доод төв, s нь хэмжээ.
+const ART = (() => {
+  const TAU = Math.PI * 2;
+
+  function poly(c, pts, fill) {
+    c.beginPath();
+    c.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) c.lineTo(pts[i][0], pts[i][1]);
+    c.closePath();
+    c.fillStyle = fill;
+    c.fill();
+  }
+  function circ(c, x, y, r, fill) {
+    c.beginPath(); c.arc(x, y, r, 0, TAU); c.fillStyle = fill; c.fill();
+  }
+  function ell(c, x, y, rx, ry, fill) {
+    c.beginPath(); c.ellipse(x, y, rx, ry, 0, 0, TAU); c.fillStyle = fill; c.fill();
+  }
+  function stroke(c, pts, col, w) {
+    c.beginPath();
+    c.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) c.lineTo(pts[i][0], pts[i][1]);
+    c.strokeStyle = col; c.lineWidth = w; c.lineCap = 'round'; c.stroke();
+  }
+  function rr(c, x, y, w, h, r) {
+    c.beginPath();
+    c.moveTo(x + r, y);
+    c.arcTo(x + w, y, x + w, y + h, r);
+    c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r);
+    c.arcTo(x, y, x + w, y, r);
+    c.closePath();
+  }
+
+  const D = {};
+
+  // ---- Байгууламж ----
+  D.house = (c, x, y, s) => {
+    c.fillStyle = '#17101f'; c.fillRect(x - 16 * s, y - 16 * s, 32 * s, 30 * s);
+    poly(c, [[x - 22 * s, y - 16 * s], [x, y - 44 * s], [x + 22 * s, y - 16 * s]], '#0b0712');
+    c.fillStyle = '#ffb347'; c.globalAlpha = 0.85;
+    c.fillRect(x - 11 * s, y - 9 * s, 6 * s, 8 * s);
+    c.fillRect(x + 5 * s, y - 9 * s, 6 * s, 8 * s);
+    c.globalAlpha = 1;
+    c.fillStyle = '#050308'; c.fillRect(x - 4 * s, y - 2 * s, 8 * s, 16 * s);
+  };
+
+  D.church = (c, x, y, s) => {
+    c.fillStyle = '#1d1528'; c.fillRect(x - 14 * s, y - 20 * s, 28 * s, 34 * s);
+    c.fillStyle = '#1d1528'; c.fillRect(x - 6 * s, y - 50 * s, 12 * s, 32 * s);
+    poly(c, [[x - 8 * s, y - 50 * s], [x, y - 70 * s], [x + 8 * s, y - 50 * s]], '#0b0712');
+    stroke(c, [[x, y - 74 * s], [x, y - 62 * s]], '#c9a227', 2 * s);
+    stroke(c, [[x - 3 * s, y - 68 * s], [x + 3 * s, y - 68 * s]], '#c9a227', 2 * s);
+    c.fillStyle = '#ffb347'; c.globalAlpha = 0.8;
+    c.beginPath(); c.arc(x, y - 36 * s, 3 * s, 0, TAU); c.fill();
+    c.fillRect(x - 8 * s, y - 14 * s, 4 * s, 7 * s);
+    c.fillRect(x + 4 * s, y - 14 * s, 4 * s, 7 * s);
+    c.globalAlpha = 1;
+    c.fillStyle = '#050308'; c.fillRect(x - 4 * s, y - 4 * s, 8 * s, 18 * s);
+  };
+
+  D.castle = (c, x, y, s) => {
+    c.fillStyle = '#2a2034';
+    c.fillRect(x - 30 * s, y - 26 * s, 60 * s, 40 * s);
+    for (const tx of [-30, 22]) {
+      c.fillRect(x + tx * s - 8 * s, y - 46 * s, 16 * s, 60 * s);
+      poly(c, [[x + tx * s - 10 * s, y - 46 * s], [x + tx * s, y - 66 * s], [x + tx * s + 10 * s, y - 46 * s]], '#15101e');
+    }
+    c.fillStyle = '#ffb347';
+    c.beginPath(); c.arc(x, y - 6 * s, 6 * s, Math.PI, 0); c.lineTo(x + 6 * s, y + 14 * s); c.lineTo(x - 6 * s, y + 14 * s); c.fill();
+    c.fillStyle = '#050308';
+    c.fillRect(x - 5 * s, y - 2 * s, 10 * s, 16 * s);
+  };
+
+  D.tomb = (c, x, y, s) => {
+    c.fillStyle = '#5d5a6b';
+    rr(c, x - 9 * s, y - 18 * s, 18 * s, 26 * s, 8 * s); c.fill();
+    c.fillStyle = '#2a2730';
+    c.font = `${6 * s}px serif`; c.textAlign = 'center';
+    c.fillText('RIP', x, y - 5 * s);
+  };
+
+  D.cross = (c, x, y, s) => {
+    stroke(c, [[x, y - 26 * s], [x, y + 4 * s]], '#4a4656', 4 * s);
+    stroke(c, [[x - 8 * s, y - 16 * s], [x + 8 * s, y - 16 * s]], '#4a4656', 4 * s);
+  };
+
+  D.coffin = (c, x, y, s) => {
+    poly(c, [[x - 6 * s, y - 26 * s], [x + 6 * s, y - 26 * s], [x + 11 * s, y - 14 * s],
+      [x + 9 * s, y], [x - 9 * s, y], [x - 11 * s, y - 14 * s]], '#2a1e18');
+    c.fillStyle = '#7d5c4a'; c.fillRect(x - 1 * s, y - 22 * s, 2 * s, 18 * s);
+  };
+
+  D.well = (c, x, y, s) => {
+    c.fillStyle = '#5b5560'; rr(c, x - 12 * s, y - 10 * s, 24 * s, 14 * s, 3 * s); c.fill();
+    ell(c, x, y - 10 * s, 9 * s, 3.5 * s, '#050308');
+    stroke(c, [[x - 10 * s, y - 10 * s], [x - 10 * s, y - 28 * s], [x + 10 * s, y - 28 * s], [x + 10 * s, y - 10 * s]], '#3a3440', 3 * s);
+  };
+
+  D.cauldron = (c, x, y, s) => {
+    ell(c, x, y - 4 * s, 12 * s, 8 * s, '#100e0f');
+    ell(c, x, y - 10 * s, 9 * s, 2.5 * s, '#4cc94c');
+    circ(c, x - 4 * s, y - 12 * s, 1.8 * s, '#8df08d');
+    circ(c, x + 3 * s, y - 13 * s, 2.2 * s, '#8df08d');
+  };
+
+  D.candle = (c, x, y, s) => {
+    c.fillStyle = '#e8dcb0'; c.fillRect(x - 2 * s, y - 12 * s, 4 * s, 12 * s);
+    ell(c, x, y - 15 * s, 2 * s, 3.5 * s, '#ffb347');
+    ell(c, x, y - 13 * s, 1 * s, 1.5 * s, '#fff2c0');
+  };
+
+  // ---- Ургамал, бусад ----
+  D.tree = (c, x, y, s) => {
+    stroke(c, [[x, y + 2 * s], [x, y - 30 * s]], '#2a2018', 4 * s);
+    stroke(c, [[x, y - 18 * s], [x - 10 * s, y - 28 * s]], '#2a2018', 2.5 * s);
+    stroke(c, [[x, y - 22 * s], [x + 11 * s, y - 32 * s]], '#2a2018', 2.5 * s);
+    stroke(c, [[x - 4 * s, y - 14 * s], [x - 14 * s, y - 16 * s]], '#2a2018', 2 * s);
+  };
+
+  D.web = (c, x, y, s) => {
+    c.strokeStyle = 'rgba(230,230,240,0.45)'; c.lineWidth = 0.7;
+    for (let k = 0; k < 6; k++) {
+      const a = k * TAU / 6;
+      c.beginPath(); c.moveTo(x, y);
+      c.lineTo(x + Math.cos(a) * 16 * s, y + Math.sin(a) * 16 * s); c.stroke();
+    }
+    c.beginPath(); c.arc(x, y, 8 * s, 0, Math.PI); c.stroke();
+  };
+
+  D.pumpkin = (c, x, y, s) => {
+    ell(c, x, y - 7 * s, 14 * s, 11 * s, '#e8731a');
+    ell(c, x - 6 * s, y - 7 * s, 5 * s, 10 * s, '#c25a10');
+    ell(c, x + 6 * s, y - 7 * s, 5 * s, 10 * s, '#c25a10');
+    c.fillStyle = '#4a6b2a'; c.fillRect(x - 2 * s, y - 20 * s, 4 * s, 6 * s);
+    poly(c, [[x - 7 * s, y - 11 * s], [x - 3 * s, y - 6 * s], [x - 11 * s, y - 6 * s]], '#140a04');
+    poly(c, [[x + 7 * s, y - 11 * s], [x + 3 * s, y - 6 * s], [x + 11 * s, y - 6 * s]], '#140a04');
+    poly(c, [[x - 8 * s, y - 2 * s], [x + 8 * s, y - 2 * s], [x + 5 * s, y + 2 * s], [x, y - 1 * s], [x - 5 * s, y + 2 * s]], '#140a04');
+  };
+
+  D.ghost = (c, x, y, s) => {
+    c.beginPath();
+    c.arc(x, y - 14 * s, 12 * s, Math.PI, 0);
+    c.lineTo(x + 12 * s, y + 6 * s);
+    c.lineTo(x + 8 * s, y + 1 * s);
+    c.lineTo(x + 4 * s, y + 7 * s);
+    c.lineTo(x, y + 1 * s);
+    c.lineTo(x - 4 * s, y + 7 * s);
+    c.lineTo(x - 8 * s, y + 1 * s);
+    c.lineTo(x - 12 * s, y + 6 * s);
+    c.closePath();
+    c.fillStyle = 'rgba(232,240,255,0.93)'; c.fill();
+    ell(c, x - 4 * s, y - 14 * s, 2 * s, 3 * s, '#06040c');
+    ell(c, x + 4 * s, y - 14 * s, 2 * s, 3 * s, '#06040c');
+    ell(c, x, y - 6 * s, 2.5 * s, 2 * s, '#06040c');
+  };
+
+  D.zombie = (c, x, y, s) => {
+    c.fillStyle = '#2e3d2a'; c.fillRect(x - 8 * s, y - 2 * s, 16 * s, 16 * s);
+    rr(c, x - 10 * s, y - 24 * s, 20 * s, 21 * s, 4 * s); c.fillStyle = '#7fa36a'; c.fill();
+    circ(c, x - 4 * s, y - 14 * s, 2.3 * s, '#c81d25');
+    circ(c, x + 4 * s, y - 14 * s, 2.3 * s, '#c81d25');
+    c.fillStyle = '#1a0f0a'; c.fillRect(x - 5 * s, y - 7 * s, 10 * s, 3 * s);
+    stroke(c, [[x - 8 * s, y - 20 * s], [x - 2 * s, y - 16 * s]], '#3a4a33', 1 * s);
+    stroke(c, [[x + 2 * s, y - 22 * s], [x + 7 * s, y - 18 * s]], '#3a4a33', 1 * s);
+  };
+
+  D.witch = (c, x, y, s) => {
+    stroke(c, [[x + 8 * s, y + 8 * s], [x + 24 * s, y - 16 * s]], '#8a5a2a', 2 * s);
+    poly(c, [[x + 22 * s, y - 16 * s], [x + 30 * s, y - 14 * s], [x + 24 * s, y - 10 * s]], '#c9a227');
+    poly(c, [[x - 12 * s, y + 12 * s], [x, y - 10 * s], [x + 12 * s, y + 12 * s]], '#1b1024');
+    circ(c, x, y - 14 * s, 6 * s, '#c8d8b8');
+    poly(c, [[x - 9 * s, y - 16 * s], [x + 9 * s, y - 16 * s], [x + 1 * s, y - 40 * s]], '#0c0712');
+    ell(c, x, y - 16 * s, 11 * s, 3 * s, '#0c0712');
+    circ(c, x - 2 * s, y - 14 * s, 1.2 * s, '#2a0a30');
+    circ(c, x + 2 * s, y - 14 * s, 1.2 * s, '#2a0a30');
+  };
+
+  D.skeleton = (c, x, y, s) => {
+    stroke(c, [[x, y - 8 * s], [x, y + 10 * s]], '#ece6d6', 2 * s);
+    stroke(c, [[x - 8 * s, y - 2 * s], [x + 8 * s, y - 2 * s]], '#ece6d6', 1.6 * s);
+    stroke(c, [[x - 6 * s, y + 10 * s], [x, y + 4 * s], [x + 6 * s, y + 10 * s]], '#ece6d6', 1.6 * s);
+    circ(c, x, y - 16 * s, 8 * s, '#ece6d6');
+    circ(c, x - 3 * s, y - 17 * s, 2.5 * s, '#050308');
+    circ(c, x + 3 * s, y - 17 * s, 2.5 * s, '#050308');
+    c.fillStyle = '#050308'; c.fillRect(x - 3 * s, y - 9 * s, 6 * s, 2 * s);
+  };
+
+  D.bat = (c, x, y, s) => {
+    poly(c, [[x, y], [x - 18 * s, y - 10 * s], [x - 14 * s, y - 2 * s], [x - 18 * s, y + 2 * s], [x - 8 * s, y + 4 * s]], '#1a1220');
+    poly(c, [[x, y], [x + 18 * s, y - 10 * s], [x + 14 * s, y - 2 * s], [x + 18 * s, y + 2 * s], [x + 8 * s, y + 4 * s]], '#1a1220');
+    ell(c, x, y, 5 * s, 4 * s, '#0c0810');
+    poly(c, [[x - 4 * s, y - 3 * s], [x - 2 * s, y - 8 * s], [x, y - 3 * s]], '#0c0810');
+    poly(c, [[x + 4 * s, y - 3 * s], [x + 2 * s, y - 8 * s], [x, y - 3 * s]], '#0c0810');
+    circ(c, x - 1.5 * s, y - 1 * s, 1 * s, '#ff3b3b');
+    circ(c, x + 1.5 * s, y - 1 * s, 1 * s, '#ff3b3b');
+  };
+
+  D.cat = (c, x, y, s) => {
+    stroke(c, [[x + 6 * s, y + 4 * s], [x + 18 * s, y - 4 * s]], '#0e0a12', 2.5 * s);
+    circ(c, x, y - 6 * s, 7 * s, '#0e0a12');
+    poly(c, [[x - 7 * s, y - 9 * s], [x - 5 * s, y - 18 * s], [x - 1 * s, y - 10 * s]], '#0e0a12');
+    poly(c, [[x + 7 * s, y - 9 * s], [x + 5 * s, y - 18 * s], [x + 1 * s, y - 10 * s]], '#0e0a12');
+    circ(c, x - 3 * s, y - 6 * s, 1.5 * s, '#ffd24a');
+    circ(c, x + 3 * s, y - 6 * s, 1.5 * s, '#ffd24a');
+  };
+
+  D.vampire = (c, x, y, s) => {
+    poly(c, [[x - 12 * s, y + 12 * s], [x, y - 10 * s], [x + 12 * s, y + 12 * s]], '#2a0a14');
+    circ(c, x, y - 14 * s, 6 * s, '#e8dcd0');
+    c.beginPath(); c.arc(x, y - 16 * s, 7 * s, Math.PI, 0); c.fillStyle = '#100810'; c.fill();
+    circ(c, x - 2.5 * s, y - 14 * s, 1.2 * s, '#ff2a2a');
+    circ(c, x + 2.5 * s, y - 14 * s, 1.2 * s, '#ff2a2a');
+    poly(c, [[x - 2 * s, y - 10 * s], [x - 1 * s, y - 7 * s], [x, y - 10 * s]], '#fff');
+    poly(c, [[x + 2 * s, y - 10 * s], [x + 1 * s, y - 7 * s], [x, y - 10 * s]], '#fff');
+  };
+
+  const DRAW = D;
+  const AVATAR_TYPES = ['ghost', 'pumpkin', 'zombie', 'witch', 'skeleton', 'bat', 'cat', 'vampire'];
+  const AVATAR_NAMES = {
+    ghost: 'Сүнс', pumpkin: 'Хулуу', zombie: 'Зомби', witch: 'Шулам',
+    skeleton: 'Араг яс', bat: 'Сарьсан', cat: 'Хар муур', vampire: 'Цус сорогч'
+  };
+
+  // Дүрсийг бие даасан canvas дээр зурах (лобби дээр харагдуулахад)
+  function avatarCanvas(type, size) {
+    const cv = document.createElement('canvas');
+    cv.width = size; cv.height = size;
+    const c = cv.getContext('2d');
+    c.translate(size / 2, size * 0.72);
+    const s = size / 60;
+    DRAW[type](c, 0, 0, s * 1.4);
+    return cv;
+  }
+
+  return { DRAW, AVATAR_TYPES, AVATAR_NAMES, avatarCanvas };
+})();
+
+const DRAW = ART.DRAW;
+
+// Дуу: Web Audio-р кодоор гаргана (файл шаардахгүй).
+// Браузерийн дүрмээр дуу хэрэглэгч анх дарсны дараа эхэлнэ.
+let AC = null, master = null, muted = false;
+const MASTER_VOL = 0.6;
+
+function audioInit() {
+  if (AC) return;
+  try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; }
+  master = AC.createGain();
+  master.gain.value = muted ? 0 : MASTER_VOL;
+  master.connect(AC.destination);
+  startAmbient();
+}
+
+function setMuted(m) {
+  muted = m;
+  if (master) master.gain.value = m ? 0 : MASTER_VOL;
+}
+
+// Түгшүүртэй, зөөлөн ая: бүдэг pad, удаан амьсгалтай гэрэл, үе үе хонх.
+// Шүүгдээгүй noise, хурц долгион ашиглаагүй тул радио гацсан шиг сонсогдохгүй.
+function startAmbient() {
+  const pad = AC.createGain();
+  pad.gain.value = 0.05;
+  const lp = AC.createBiquadFilter();
+  lp.type = 'lowpass'; lp.frequency.value = 420; lp.Q.value = 0.5;
+  pad.connect(lp); lp.connect(master);
+
+  // Удаан хөрөнгө (swell): гэрэл 0.05 -г хэлбэлзэнэ
+  const swell = AC.createOscillator(); swell.frequency.value = 0.05;
+  const swellAmt = AC.createGain(); swellAmt.gain.value = 0.02;
+  swell.connect(swellAmt); swellAmt.connect(pad.gain);
+  swell.start();
+
+  [55, 82.4, 110].forEach((f, i) => {
+    const o = AC.createOscillator();
+    o.type = 'sine';
+    o.frequency.value = f + (i === 1 ? 0.6 : 0); // бага зэрэг хөдөлгөөнт
+    o.connect(pad);
+    o.start();
+  });
+
+  // Хоолойн бүдэг шуугиан: маш доод давтамжийн доод хэсэг
+  const rumble = AC.createBufferSource();
+  rumble.buffer = noiseBuffer(3);
+  rumble.loop = true;
+  const rlp = AC.createBiquadFilter();
+  rlp.type = 'lowpass'; rlp.frequency.value = 140;
+  const rg = AC.createGain(); rg.gain.value = 0.02;
+  rumble.connect(rlp); rlp.connect(rg); rg.connect(master);
+  rumble.start();
+
+  setInterval(() => {
+    if (AC.state === 'running' && !muted && Math.random() < 0.6) eerieBell();
+  }, 7000);
+}
+
+function eerieBell() {
+  const base = [196, 220, 247, 262][Math.floor(Math.random() * 4)];
+  tone(base, 4, 'sine', 0.05, 0);
+  tone(base * 2.01, 3, 'sine', 0.02, 0.02);
+}
+
+function tone(freq, dur, type, vol, delay) {
+  const t = AC.currentTime + (delay || 0);
+  const o = AC.createOscillator();
+  o.type = type; o.frequency.value = freq;
+  const g = AC.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + 0.08);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(master);
+  o.start(t); o.stop(t + dur + 0.05);
+}
+
+function noiseBuffer(dur) {
+  const b = AC.createBuffer(1, Math.floor(AC.sampleRate * dur), AC.sampleRate);
+  const d = b.getChannelData(0);
+  let last = 0;
+  // Бараг хурц бус (brown) noise — дуугаа шуугиулахгүй
+  for (let i = 0; i < d.length; i++) {
+    last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02;
+    d[i] = last * 3.5;
+  }
+  return b;
+}
+
+// Шуламын инээд: доош чиглэсэн, чичирсэн 'ха-ха-ха'
+function laugh() {
+  for (let k = 0; k < 5; k++) {
+    const t = AC.currentTime + k * 0.22;
+    const o = AC.createOscillator();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(420, t);
+    o.frequency.exponentialRampToValueAtTime(230, t + 0.18);
+    const vib = AC.createOscillator(); vib.frequency.value = 22;
+    const vg = AC.createGain(); vg.gain.value = 12;
+    vib.connect(vg); vg.connect(o.frequency);
+    const bp = AC.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 800; bp.Q.value = 1.2;
+    const g = AC.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.22, t + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.19);
+    o.connect(bp); bp.connect(g); g.connect(master);
+    vib.start(t); o.start(t);
+    vib.stop(t + 0.2); o.stop(t + 0.2);
+  }
+}
+
+// Сүнсний хашгираан: дуу нь доороос дээш гүйж, чичирнэ
+function scream() {
+  const t = AC.currentTime;
+  const o = AC.createOscillator();
+  o.type = 'sawtooth';
+  o.frequency.setValueAtTime(420, t);
+  o.frequency.exponentialRampToValueAtTime(1300, t + 1.1);
+  const vib = AC.createOscillator(); vib.frequency.value = 9;
+  const vg = AC.createGain(); vg.gain.value = 40;
+  vib.connect(vg); vg.connect(o.frequency);
+  const lp = AC.createBiquadFilter(); lp.type = 'lowpass';
+  lp.frequency.setValueAtTime(900, t); lp.frequency.exponentialRampToValueAtTime(2200, t + 1.1);
+  const g = AC.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.18, t + 0.12);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 1.3);
+  o.connect(lp); lp.connect(g); g.connect(master);
+  vib.start(t); o.start(t);
+  vib.stop(t + 1.3); o.stop(t + 1.3);
+}
+
+function chime() {
+  [523, 659, 784, 1046].forEach((f, i) => tone(f, 1.0, 'triangle', 0.12, i * 0.13));
+}
+
+// Шооны чимээ — богино товшилт
+function rattle() {
+  const t = AC.currentTime;
+  const o = AC.createOscillator(); o.type = 'square'; o.frequency.value = 900;
+  const g = AC.createGain();
+  g.gain.setValueAtTime(0.06, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+  o.connect(g); g.connect(master);
+  o.start(t); o.stop(t + 0.07);
+}
+
+const FX = {
+  laugh, scream, chime, rattle,
+  bell: () => eerieBell()
+};
+
+function playFx(name) {
+  if (!AC || !master || !FX[name]) return;
+  if (AC.state === 'suspended') AC.resume();
+  FX[name]();
+}
+
+// Тоглоомын логик, дэлгэц, онлайн холболт.
+// - config.js-д Firebase тохирсон бол онлайн горим: линкээр орсон хүн бүр адил өрөөнд нэгдэнэ (нэвтрэх шаардлагагүй).
+// - Тохируулаагүй бол нэг компьютер дээр ээлжээр тоглох горим.
+
+const COLORS = ['#ff8a1f', '#7bd389', '#8ab6ff', '#f0e04a', '#e07bd6'];
+const OFF = [[-8, -6], [8, -6], [-8, 8], [8, 8], [0, 0]];
+const TILE_COLOR = {
+  plain: '#2a2238', fwd4: '#1f6b4a', fwd5: '#1f6b4a', roll: '#2d5a8c',
+  back2: '#7a2a30', back3: '#7a2a30', jail: '#4a2a5a'
+};
+const TILE_LABEL = { fwd4: '+4', fwd5: '+5', roll: '↻', back2: '?', back3: '?', jail: 'Г' };
+const WRONG_MSG = ['Азгүй тахиа', 'Мундаг ч амьтан болдоо', 'Ишш чааваасдаа', 'Юм авцаан', 'Гажраа гажраа'];
+const GOOD_MSG = ['Баяр хүргэе заваан амьтан минь', 'Чи ч самуурсан эм юм аа', 'Азтайзаяа'];
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+const rollDie = () => 1 + Math.floor(Math.random() * 14);
+const clone = g => JSON.parse(JSON.stringify(g));
+
+// ---------- Төлөв ----------
+function newGame() {
+  return {
+    status: 'lobby', players: [], cur: 0, phase: 'roll', dice: null, bonus: 0,
+    q: null, msg: 'Тоглогчид нэгдэж байна…', winner: null, hostId: null, ver: 0, fx: null
+  };
+}
+
+function setFx(s, fx) { s.fx = fx; s.ver++; }
+
+function turnStart(s) {
+  const notes = [];
+  const n = s.players.length;
+  for (let k = 0; k < n; k++) {
+    const p = s.players[s.cur];
+    if (!p.skip) break;
+    p.skip = false;
+    notes.push(`${p.name} өнжлөө`);
+    s.cur = (s.cur + 1) % n;
+  }
+  s.phase = 'roll';
+  s.bonus = 0;
+  s.q = null;
+  notes.push(`${s.players[s.cur].name}-ийн ээлж`);
+  s.msg = notes.join(' · ');
+}
+
+function nextTurn(s, prefix) {
+  s.cur = (s.cur + 1) % s.players.length;
+  turnStart(s);
+  if (prefix) s.msg = prefix + ' · ' + s.msg;
+}
+
+function winP(s, p) {
+  s.status = 'over';
+  s.phase = 'over';
+  s.winner = p.name;
+  s.msg = `${p.name} гарцад хүрч түрүүллээ!`;
+  setFx(s, 'chime');
+}
+
+// ---------- Үйлдлүүд (шинэ төлөв буцаана) ----------
+function joinP(G, id, name, avatar) {
+  if (G.status !== 'lobby' || G.players.length >= 5 || G.players.some(p => p.id === id)) return G;
+  if (G.players.some(p => p.avatar === avatar)) return G; // дүр давхцахгүй
+  const s = clone(G);
+  s.players.push({ id, name, avatar, color: COLORS[s.players.length], pos: 0, skip: false });
+  if (!s.hostId) s.hostId = id;
+  s.msg = `${name} нэгдлээ`;
+  setFx(s, 'bell');
+  return s;
+}
+
+function startP(G) {
+  if (G.status !== 'lobby' || G.players.length < 2) return G;
+  const s = clone(G);
+  s.status = 'playing';
+  s.cur = 0;
+  turnStart(s);
+  setFx(s, 'bell');
+  return s;
+}
+
+function rollP(G, a, b) {
+  if (G.status !== 'playing' || G.phase !== 'roll') return G;
+  const s = clone(G);
+  const p = s.players[s.cur];
+  const t = a + b;
+  s.dice = [a, b];
+  p.pos = Math.min(p.pos + t, LAST);
+  const note = `${p.name}: ${a}+${b}=${t}`;
+  setFx(s, 'rattle');
+
+  if (p.pos >= LAST) { winP(s, p); return s; }
+
+  switch (BOARD_KINDS[p.pos]) {
+    case 'plain':
+      nextTurn(s, note);
+      break;
+
+    case 'fwd4':
+    case 'fwd5': {
+      const want = BOARD_KINDS[p.pos] === 'fwd4' ? 4 : 5;
+      const steps = Math.min(want, 10 - s.bonus); // бонус урагшлал нэг ээлжид хамгийн ихдээ 10
+      if (steps <= 0) { nextTurn(s, note + ' · Бонусын хязгаар дууссан'); break; }
+      s.bonus += steps;
+      p.pos = Math.min(p.pos + steps, LAST);
+      if (p.pos >= LAST) { winP(s, p); break; }
+      setFx(s, 'chime');
+      nextTurn(s, `${note} · ${pick(GOOD_MSG)} (+${steps})`);
+      break;
+    }
+
+    case 'roll':
+      s.msg = `${note} · Дахин шоо хаях!`;
+      break;
+
+    case 'back2':
+    case 'back3':
+      s.phase = 'question';
+      s.q = Math.floor(Math.random() * QUESTIONS.length);
+      s.msg = `${note} · Шийтгэл! Асуултанд зөв хариулбал шийтгэлгүй`;
+      setFx(s, 'bell');
+      break;
+
+    case 'jail':
+      p.skip = true;
+      setFx(s, 'laugh');
+      nextTurn(s, `${note} · Гянданд хоригдлоо, нэг тойрог өнжинө`);
+      break;
+  }
+  return s;
+}
+
+function answerP(G, i) {
+  if (G.status !== 'playing' || G.phase !== 'question') return G;
+  const s = clone(G);
+  const p = s.players[s.cur];
+  const ok = i === QUESTIONS[s.q].a;
+  if (ok) {
+    setFx(s, 'chime');
+    nextTurn(s, `${pick(GOOD_MSG)} — шийтгэлгүй!`);
+  } else {
+    p.pos = Math.max(0, p.pos - 3);
+    setFx(s, 'scream');
+    nextTurn(s, `${pick(WRONG_MSG)} (−3 нүд)`);
+  }
+  return s;
+}
+
+function restartP(G) {
+  if (G.status !== 'over') return G;
+  const s = clone(G);
+  s.players.forEach(p => { p.pos = 0; p.skip = false; });
+  s.status = 'playing';
+  s.cur = 0;
+  s.winner = null;
+  s.dice = null;
+  turnStart(s);
+  setFx(s, 'bell');
+  return s;
+}
+
+// ---------- Төлөв, холболт ----------
+let G = newGame();
+let SNAP = null;
+let ref = null;          // Firebase-ийн өрөөний лавлагаа
+let online = false;
+let myId = '';
+let code = '';
+let selAvatar = ART.AVATAR_TYPES[0];
+let lastVer = -1;
+let firstSnap = true;
+
+function isCur(id) { const p = G.players[G.cur]; return !!p && p.id === id; }
+function canRoll() {
+  if (G.status !== 'playing' || G.phase !== 'roll') return false;
+  return !online || isCur(myId);
+}
+function canAnswer() {
+  if (G.status !== 'playing' || G.phase !== 'question') return false;
+  return !online || isCur(myId);
+}
+
+async function dispatch(fn, args) {
+  const next = fn(G, ...args);
+  if (next === G) return;
+  G = next;
+  render();
+  if (ref) {
+    try { await ref.set(G); }
+    catch (e) {
+      G = SNAP ? clone(SNAP) : newGame();
+      $('err').textContent = 'Холболтын алдаа. Дахин оролдоно уу.';
+      render();
+    }
+  }
+}
+
+// ---------- Үйлдлүүд ----------
+function actJoin() {
+  const name = ($('nameIn').value.trim() || 'Тоглогч').slice(0, 12);
+  const id = online ? myId : 'l' + Math.random().toString(36).slice(2, 8);
+  $('nameIn').value = '';
+  $('err').textContent = '';
+  if (G.players.some(p => p.avatar === selAvatar)) { $('err').textContent = 'Энэ дүр аль хэдийн сонгогдсон байна'; return; }
+  dispatch(joinP, [id, name, selAvatar]);
+}
+function actStart() { if (!online || G.hostId === myId) dispatch(startP, []); }
+function actRoll() { if (canRoll()) dispatch(rollP, [rollDie(), rollDie()]); }
+function actAnswer(i) { if (canAnswer()) dispatch(answerP, [i]); }
+function actRestart() { if (!online || G.hostId === myId) dispatch(restartP, []); }
+
+// ---------- Дэлгэц ----------
+function dieSVG(v) {
+  const pts = [];
+  for (let k = 0; k < 14; k++) {
+    const a = -Math.PI / 2 + k * 2 * Math.PI / 14;
+    pts.push((Math.cos(a) * 34).toFixed(1) + ',' + (Math.sin(a) * 34).toFixed(1));
+  }
+  return `<svg viewBox="-38 -38 76 76" width="76" height="76"><polygon points="${pts.join(' ')}" fill="#f3e7d3" stroke="#ff8a1f" stroke-width="3"/><text y="7" text-anchor="middle" font-size="22" font-weight="bold" fill="#140f1f">${v}</text></svg>`;
+}
+
+function render() {
+  const lobby = G.status === 'lobby';
+  $('lobby').hidden = !lobby;
+  $('game').hidden = lobby;
+  $('roomCode').textContent = code;
+  if (lobby) renderLobby(); else renderGame();
+  if (!lobby) drawBoard();
+
+  if (G.ver !== lastVer) {
+    if (!firstSnap) playFx(G.fx);
+    lastVer = G.ver;
+    if (!lobby && !firstSnap) followCurrent();
+  }
+  firstSnap = false;
+}
+
+function renderLobby() {
+  document.querySelectorAll('.av').forEach(b => {
+    b.classList.toggle('sel', b.dataset.a === selAvatar);
+    b.disabled = G.players.some(p => p.avatar === b.dataset.a);
+  });
+  $('lobbyPlayers').innerHTML = G.players.map(p =>
+    `<div class="pl"><i style="background:${p.color}"></i>${esc(ART.AVATAR_NAMES[p.avatar])} · ${esc(p.name)}${p.id === G.hostId ? ' (эзэн)' : ''}</div>`
+  ).join('') || '<em>Хэн ч нэгдээгүй байна</em>';
+
+  const joined = online ? G.players.some(p => p.id === myId) : false;
+  $('joinRow').hidden = online && (joined || G.players.length >= 5);
+  $('startBtn').hidden = !(G.players.length >= 2 && (!online || G.hostId === myId));
+}
+
+function renderGame() {
+  $('players').innerHTML = G.players.map((p, i) =>
+    `<div class="pl ${i === G.cur && G.status === 'playing' ? 'cur' : ''}"><i style="background:${p.color}"></i>${esc(ART.AVATAR_NAMES[p.avatar])} · ${esc(p.name)} · ${p.pos}/${LAST}${p.skip ? ' (гяндан)' : ''}</div>`
+  ).join('');
+  $('dice').innerHTML = G.dice ? dieSVG(G.dice[0]) + dieSVG(G.dice[1]) : '';
+  $('message').textContent = G.msg;
+  $('rollBtn').disabled = !canRoll();
+  $('restartBtn').hidden = G.status !== 'over' || (online && G.hostId !== myId);
+  $('muteBtn').textContent = muted ? 'Дуу: унтраасан' : 'Дуу: асаалттай';
+
+  const showQ = G.status === 'playing' && G.phase === 'question' && G.q !== null;
+  $('modal').hidden = !showQ;
+  if (showQ) {
+    const q = QUESTIONS[G.q];
+    const me = G.players[G.cur];
+    $('qText').textContent = q.q;
+    const opts = $('qOpts');
+    opts.innerHTML = '';
+    if (canAnswer()) {
+      $('qWait').textContent = '';
+      q.o.forEach((text, i) => {
+        const b = document.createElement('button');
+        b.textContent = ['А', 'Б', 'В', 'Г'][i] + '. ' + text;
+        b.onclick = () => actAnswer(i);
+        opts.appendChild(b);
+      });
+    } else {
+      $('qWait').textContent = `${ART.AVATAR_NAMES[me.avatar]} ${me.name} хариулж байна…`;
+    }
+  }
+}
+
+// Нүдний дүрс
+function drawTileIcon(ctx, kind, x, y) {
+  const label = TILE_LABEL[kind];
+  if (!label) return;
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 12px sans-serif';
+  ctx.fillText(label, x, y + 1);
+}
+
+function drawBoard() {
+  const cv = $('board');
+  const ctx = cv.getContext('2d');
+  cv.width = WORLD.w;
+  cv.height = WORLD.h;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  // Шөнийн фон
+  const bg = ctx.createLinearGradient(0, 0, 0, WORLD.h);
+  bg.addColorStop(0, '#080512');
+  bg.addColorStop(0.5, '#1b0e28');
+  bg.addColorStop(1, '#2b1036');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, WORLD.w, WORLD.h);
+
+  // Сар
+  const mx = WORLD.w - 130, my = 110;
+  const mg = ctx.createRadialGradient(mx, my, 10, mx, my, 70);
+  mg.addColorStop(0, 'rgba(255,250,220,0.35)');
+  mg.addColorStop(1, 'rgba(255,250,220,0)');
+  ctx.fillStyle = mg; ctx.fillRect(mx - 80, my - 80, 160, 160);
+  ctx.beginPath(); ctx.arc(mx, my, 34, 0, Math.PI * 2);
+  ctx.fillStyle = '#efe6c4'; ctx.fill();
+  ctx.fillStyle = 'rgba(120,100,70,0.35)';
+  ctx.beginPath(); ctx.arc(mx - 10, my - 6, 6, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(mx + 12, my + 10, 4, 0, Math.PI * 2); ctx.fill();
+
+  // Манан
+  FOG.forEach(f => {
+    const g = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.r);
+    g.addColorStop(0, 'rgba(160,140,200,0.09)');
+    g.addColorStop(1, 'rgba(160,140,200,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(f.x - f.r, f.y - f.r, f.r * 2, f.r * 2);
+  });
+
+  // Зам: сүүдэр, дараа нь гол зам, дараа нь гэрэлтсэн шугам
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  const roadPath = () => {
+    ctx.beginPath();
+    BOARD_PTS.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+  };
+  ctx.globalAlpha = 0.5;
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 42;
+  ctx.save(); ctx.translate(5, 6); roadPath(); ctx.stroke(); ctx.restore();
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = '#3a2d52';
+  ctx.lineWidth = 36;
+  roadPath(); ctx.stroke();
+  ctx.strokeStyle = '#5a4a78';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([8, 10]);
+  roadPath(); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Чимэглэл
+  BOARD_FILL.forEach(d => DRAW[d.t](ctx, d.x, d.y, d.s));
+
+  // Нүднүүд
+  BOARD_PTS.forEach((p, i) => {
+    if (i === LAST) return;
+    const kind = i === 0 ? 'start' : BOARD_KINDS[i];
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 12, 0, Math.PI * 2);
+    ctx.fillStyle = i === 0 ? '#3b2f4f' : TILE_COLOR[kind];
+    ctx.fill();
+    ctx.strokeStyle = kind === 'plain' || i === 0 ? '#8c79ad' : '#ffd08a';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    if (i === 0) {
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 11px sans-serif';
+      ctx.fillText('S', p.x, p.y + 1);
+    } else {
+      drawTileIcon(ctx, kind, p.x, p.y);
+    }
+  });
+
+  // Гарц (шилтгээн)
+  const goal = BOARD_PTS[LAST];
+  DRAW.castle(ctx, goal.x, goal.y + 8, 0.9);
+
+  // Тоглогчдын дүрс
+  G.players.forEach((pl, i) => {
+    const base = BOARD_PTS[pl.pos];
+    const x = base.x + OFF[i][0];
+    const y = base.y + OFF[i][1] + 10;
+    if (i === G.cur && G.status === 'playing') {
+      ctx.beginPath();
+      ctx.arc(x, y - 10, 17, 0, Math.PI * 2);
+      ctx.strokeStyle = '#fff';
+      ctx.setLineDash([3, 3]);
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    DRAW[pl.avatar](ctx, x, y, 0.9);
+    ctx.font = 'bold 11px sans-serif';
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#000';
+    ctx.strokeText(pl.name, x, y - 36);
+    ctx.fillStyle = pl.color;
+    ctx.fillText(pl.name, x, y - 36);
+  });
+}
+
+function followCurrent() {
+  if (G.status !== 'playing') return;
+  const p = BOARD_PTS[G.players[G.cur].pos];
+  $('boardWrap').scrollTo({ top: p.y - 300, left: Math.max(0, p.x - 300), behavior: 'smooth' });
+}
+
+// ---------- Эхлүүлэх ----------
+function buildAvatars() {
+  const box = $('avatars');
+  ART.AVATAR_TYPES.forEach(type => {
+    const b = document.createElement('button');
+    b.className = 'av';
+    b.dataset.a = type;
+    b.title = ART.AVATAR_NAMES[type];
+    b.appendChild(ART.avatarCanvas(type, 56));
+    b.onclick = () => { selAvatar = type; renderLobby(); };
+    box.appendChild(b);
+  });
+}
+
+function initFirebase() {
+  if (!window.firebase || typeof FIREBASE_CONFIG === 'undefined' || !FIREBASE_CONFIG.databaseURL) return null;
+  try {
+    if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+    return firebase.database();
+  } catch (e) { return null; }
+}
+
+function makeId() {
+  let id = sessionStorage.getItem('sz_id');
+  if (!id) { id = 'p' + Math.random().toString(36).slice(2, 10); sessionStorage.setItem('sz_id', id); }
+  return id;
+}
+
+function init() {
+  code = (location.hash.slice(1) || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+  if (!code) {
+    code = Math.random().toString(36).slice(2, 6).toUpperCase();
+    location.hash = code;
+  }
+  myId = makeId();
+
+  const db = initFirebase();
+  if (db) {
+    online = true;
+    ref = db.ref('rooms/' + code);
+    ref.on('value', snap => {
+      const v = snap.val();
+      SNAP = v ? v : newGame();
+      G = clone(SNAP);
+      render();
+    }, () => { $('err').textContent = 'Холболт тасарлаа'; });
+  }
+
+  buildAvatars();
+  $('joinBtn').onclick = actJoin;
+  $('startBtn').onclick = actStart;
+  $('rollBtn').onclick = actRoll;
+  $('restartBtn').onclick = actRestart;
+  $('copyBtn').onclick = () => {
+    const url = location.href;
+    if (navigator.clipboard) navigator.clipboard.writeText(url).then(() => { $('err').textContent = 'Линк хуулагдлаа'; });
+    else $('err').textContent = url;
+  };
+  $('muteBtn').onclick = () => {
+    setMuted(!muted);
+    render();
+  };
+  document.addEventListener('pointerdown', () => audioInit(), { once: true });
+
+  render();
+}
+
+init();
+
+</script>
+</body>
+</html>
