@@ -37,6 +37,13 @@ aside{background:#1a1328ee;border:1px solid #6b5a86;border-radius:14px;padding:1
 #modal .box{background:#1a1328;border:2px solid #ff8a1f;border-radius:14px;padding:20px;max-width:460px;width:100%;box-shadow:0 0 40px #ff8a1f55}
 #qOpts button{display:block;width:100%;text-align:left;background:#2a2238;color:#f3e7d3;border:1px solid #6b5a86;margin:6px 0}
 
+#rollOverlay{position:fixed;inset:0;background:#000000b3;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;z-index:4;pointer-events:none}
+#rollDice{display:flex;gap:28px}
+#rollDice svg{width:120px;height:120px;filter:drop-shadow(0 0 12px #ff8a1f88)}
+#rollMsg{font-size:24px;color:#ffd08a;text-shadow:0 0 14px #ff8a1f;text-align:center;min-height:1.5em;padding:0 16px}
+.spin{animation:spin .5s linear infinite}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+  
 @media (max-width:800px){
   main{grid-template-columns:1fr}
   #boardWrap{height:60vh}
@@ -114,6 +121,7 @@ const QUESTIONS = [
   { q: 'Франкенштейн романыг хэн бичсэн бэ?', o: ['Брэм Стокер', 'Мэри Шелли', 'Эдгар По', 'Льюис Кэрролл'], a: 1 },
   { q: 'Жак-о\'-лантерн гэдэг хулуу ямар уламжлалаас гаралтай вэ?', o: ['Ирланд', 'Норвеги', 'Перу', 'Мадагаскар'], a: 0 },
   { q: 'Halloween хэдэн сарын хэдэнд тохиодог вэ?', o: ['10-р сарын 31', '11-р сарын 1', '9-р сарын 30', '12-р сарын 25'], a: 0 },
+  { q: 'Могойны зулзагыг юу гэдэг вэ?', o: ['Зогой', 'Дүдэр', 'Онох', 'Ногоолой'], a: 0 },
   { q: 'Хүүхдүүд Halloween-д "Trick or treat" гэж юу гуйдаг вэ?', o: ['Мөнгө', 'Амттан', 'Машин', 'Гутал'], a: 1 },
   { q: 'Вампирын сул тал гэж уламжлалт итгэлээр юу байдаг вэ?', o: ['Сармис', 'Чихэр', 'Хөгжим', 'Нөмөр'], a: 0 },
   { q: 'Сарьсан багваахай ихэвчлэн юу иддэг вэ?', o: ['Мах', 'Шавьж', 'Үр тариа', 'Ургамал'], a: 1 },
@@ -123,6 +131,7 @@ const QUESTIONS = [
   { q: 'Ус далайн түвшинд хэдэн градусд буцалдаг вэ?', o: ['50', '100', '150', '200'], a: 1 },
   { q: 'Нарны аймгийн хамгийн том гариг аль нь вэ?', o: ['Бархасбадь', 'Санчир', 'Дэлхий', 'Ангараг'], a: 0 },
   { q: 'Монгол Улсын нийслэл аль нь вэ?', o: ['Дархан', 'Улаанбаатар', 'Эрдэнэт', 'Чойбалсан'], a: 1 },
+  { q: 'Төрөхдөө хар, үхэхдээ цагаан тэр юу вэ?', o: ['арга билэг', 'сар', 'Майкл Жексон', 'Хун'], a: 2 },
   { q: '"Жаавс" киноны аймшигт дүр ямар амьтан вэ?', o: ['Загас (шүрхүй)', 'Арслан', 'Чоно', 'Баавгай'], a: 0 },
   { q: 'Нэг жилд хэдэн сар байдаг вэ?', o: ['10', '12', '14', '16'], a: 1 },
   { q: 'Аймшгийн гарал үүслийн тухай домгийн ид шидтэй баяруудын нэг нь аль нь вэ?', o: ['Samhain', 'Naadam', 'Tsagaan Sar', 'Easter'], a: 0 }
@@ -667,6 +676,12 @@ function playFx(name) {
 // - config.js-д Firebase тохирсон бол онлайн горим: линкээр орсон хүн бүр адил өрөөнд нэгдэнэ (нэвтрэх шаардлагагүй).
 // - Тохируулаагүй бол нэг компьютер дээр ээлжээр тоглох горим.
 
+<!-- ШОО ХАЯХ ДЭЛГЭЦ (голд) -->
+<div id="rollOverlay" hidden>
+  <div id="rollDice"></div>
+  <div id="rollMsg"></div>
+</div>
+  
 const COLORS = ['#ff8a1f', '#7bd389', '#8ab6ff', '#f0e04a', '#e07bd6'];
 const OFF = [[-8, -6], [8, -6], [-8, 8], [8, 8], [0, 0]];
 const TILE_COLOR = {
@@ -739,6 +754,7 @@ function joinP(G, id, name, avatar) {
 function startP(G) {
   if (G.status !== 'lobby' || G.players.length < 2) return G;
   const s = clone(G);
+  s.rollId = (G.rollId || 0) + 1;
   s.status = 'playing';
   s.cur = 0;
   turnStart(s);
@@ -836,7 +852,8 @@ let code = '';
 let selAvatar = ART.AVATAR_TYPES[0];
 let lastVer = -1;
 let firstSnap = true;
-
+let rolling = false, spinTimer = null, rollTimer = null, lastRollId = -1;
+  
 function isCur(id) { const p = G.players[G.cur]; return !!p && p.id === id; }
 function canRoll() {
   if (G.status !== 'playing' || G.phase !== 'roll') return false;
@@ -872,7 +889,36 @@ function actJoin() {
   dispatch(joinP, [id, name, selAvatar]);
 }
 function actStart() { if (!online || G.hostId === myId) dispatch(startP, []); }
-function actRoll() { if (canRoll()) dispatch(rollP, [rollDie(), rollDie()]); }
+function showSpin() {
+  $('rollOverlay').hidden = false;
+  $('rollMsg').textContent = '';
+  $('rollDice').innerHTML = dieSVG(1) + dieSVG(1);
+  $('rollDice').querySelectorAll('svg').forEach(s => s.classList.add('spin'));
+  spinTimer = setInterval(() => {
+    $('rollDice').querySelectorAll('text').forEach(t => t.textContent = rollDie());
+  }, 90);
+}
+
+function showResult(dice, msg) {
+  clearInterval(spinTimer); spinTimer = null;
+  clearTimeout(rollTimer);
+  $('rollDice').innerHTML = dieSVG(dice[0]) + dieSVG(dice[1]);
+  $('rollMsg').textContent = msg;
+  $('rollOverlay').hidden = false;
+  rollTimer = setTimeout(() => { $('rollOverlay').hidden = true; }, 2500);
+}
+
+function actRoll() {
+  if (!canRoll() || rolling) return;
+  rolling = true;
+  showSpin();
+  setTimeout(() => {
+    clearInterval(spinTimer); spinTimer = null;
+    rolling = false;
+    if (!canRoll()) { $('rollOverlay').hidden = true; return; }
+    dispatch(rollP, [rollDie(), rollDie()]);
+  }, 1200);
+}
 function actAnswer(i) { if (canAnswer()) dispatch(answerP, [i]); }
 function actRestart() { if (!online || G.hostId === myId) dispatch(restartP, []); }
 
@@ -898,6 +944,12 @@ function render() {
     if (!firstSnap) playFx(G.fx);
     lastVer = G.ver;
     if (!lobby && !firstSnap) followCurrent();
+  }
+
+  // Шоо хаясны дараа үр дүн, мэдэгдэл голд гарна (бүх тоглогчид харна)
+  if (G.rollId !== undefined && G.rollId !== lastRollId) {
+    lastRollId = G.rollId;
+    if (!firstSnap && G.dice) showResult(G.dice, G.msg);
   }
   firstSnap = false;
 }
