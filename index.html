@@ -960,14 +960,12 @@ function renderLobby() {
     b.disabled = G.players.some(p => p.avatar === b.dataset.a);
   });
   $('lobbyPlayers').innerHTML = G.players.map(p =>
-    `<div class="pl"><i style="background:${p.color}"></i>${esc(ART.AVATAR_NAMES[p.avatar])} · ${esc(p.name)}${p.id === G.hostId ? ' (эзэн)' : ''}</div>`
+    <div class="pl"><i style="background:${p.color}"></i>${esc(ART.AVATAR_NAMES[p.avatar])} · ${esc(p.name)}${p.id === G.hostId ? ' (эзэн)' : ''}</div>
   ).join('') || '<em>Хэн ч нэгдээгүй байна</em>';
-
   const joined = online ? G.players.some(p => p.id === myId) : false;
   $('joinRow').hidden = online && (joined || G.players.length >= 5);
   $('startBtn').hidden = !(G.players.length >= 2 && (!online || G.hostId === myId));
 }
-
 function renderGame() {
   $('players').innerHTML = G.players.map((p, i) =>
     `<div class="pl ${i === G.cur && G.status === 'playing' ? 'cur' : ''}"><i style="background:${p.color}"></i>${esc(ART.AVATAR_NAMES[p.avatar])} · ${esc(p.name)} · ${p.pos}/${LAST}${p.skip ? ' (гяндан)' : ''}</div>`
