@@ -90,7 +90,10 @@ aside{background:#1a1328ee;border:1px solid #6b5a86;border-radius:14px;padding:1
     <p id="qWait"></p>
   </div>
 </div>
-
+<div id="rollOverlay" hidden>
+  <div id="rollDice"></div>
+  <div id="rollMsg"></div>
+</div>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script>
@@ -944,12 +947,7 @@ function playFx(name) {
 // Тоглоомын логик, дэлгэц, онлайн холболт.
 // - config.js-д Firebase тохирсон бол онлайн горим: линкээр орсон хүн бүр адил өрөөнд нэгдэнэ (нэвтрэх шаардлагагүй).
 // - Тохируулаагүй бол нэг компьютер дээр ээлжээр тоглох горим.
-
- <!-- ШОО ХАЯХ ДЭЛГЭЦ (голд) -->
-<div id="rollOverlay" hidden>
-  <div id="rollDice"></div>
-  <div id="rollMsg"></div>
-</div>
+>
   
 const COLORS = ['#ff8a1f', '#7bd389', '#8ab6ff', '#f0e04a', '#e07bd6'];
 const OFF = [[-8, -6], [8, -6], [-8, 8], [8, 8], [0, 0]];
@@ -1316,8 +1314,9 @@ function init() {
   $('restartBtn').onclick = actRestart;
   $('copyBtn').onclick = () => {
     const url = location.href;
-    if (navigator.clipboard) navigator.clipboard.writeText(url).then(() => { $('err').textContent = 'Линк хуулагдлаа'; });
-    else $('err').textContent = url;
+    const fallback = () => { $('err').textContent = url; };
+    if (navigator.clipboard) navigator.clipboard.writeText(url).then(() => { $('err').textContent = 'Линк хуулагдлаа'; }).catch(fallback);
+    else fallback();
   };
   $('muteBtn').onclick = () => { setMuted(!muted); render(); };
   document.addEventListener('pointerdown', () => audioInit(), { once: true });
