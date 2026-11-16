@@ -71,12 +71,6 @@ aside{background:#1a1328ee;border:1px solid #6b5a86;border-radius:14px;padding:1
   <p id="err"></p>
 </section>
 
-  <!-- ШОО ХАЯХ ДЭЛГЭЦ (голд) -->
-<div id="rollOverlay" hidden>
-  <div id="rollDice"></div>
-  <div id="rollMsg"></div>
-</div>
-  
 <!-- ТОГЛОО -->
 <main id="game" hidden>
   <div id="boardWrap"><canvas id="board"></canvas></div>
@@ -954,7 +948,7 @@ function playFx(name) {
 // - config.js-д Firebase тохирсон бол онлайн горим: линкээр орсон хүн бүр адил өрөөнд нэгдэнэ (нэвтрэх шаардлагагүй).
 // - Тохируулаагүй бол нэг компьютер дээр ээлжээр тоглох горим.
 
-<!-- ШОО ХАЯХ ДЭЛГЭЦ (голд) -->
+ <!-- ШОО ХАЯХ ДЭЛГЭЦ (голд) -->
 <div id="rollOverlay" hidden>
   <div id="rollDice"></div>
   <div id="rollMsg"></div>
@@ -1276,122 +1270,7 @@ function renderGame() {
   }
 }
 
-// Нүдний дүрс
-function drawTileIcon(ctx, kind, x, y) {
-  const label = TILE_LABEL[kind];
-  if (!label) return;
-  ctx.fillStyle = '#fff';
-  ctx.font = 'bold 12px sans-serif';
-  ctx.fillText(label, x, y + 1);
-}
 
-function drawBoard() {
-  const cv = $('board');
-  const ctx = cv.getContext('2d');
-  cv.width = WORLD.w;
-  cv.height = WORLD.h;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-
-  // Шөнийн фон
-  const bg = ctx.createLinearGradient(0, 0, 0, WORLD.h);
-  bg.addColorStop(0, '#080512');
-  bg.addColorStop(0.5, '#1b0e28');
-  bg.addColorStop(1, '#2b1036');
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, WORLD.w, WORLD.h);
-
-  // Сар
-  const mx = WORLD.w - 130, my = 110;
-  const mg = ctx.createRadialGradient(mx, my, 10, mx, my, 70);
-  mg.addColorStop(0, 'rgba(255,250,220,0.35)');
-  mg.addColorStop(1, 'rgba(255,250,220,0)');
-  ctx.fillStyle = mg; ctx.fillRect(mx - 80, my - 80, 160, 160);
-  ctx.beginPath(); ctx.arc(mx, my, 34, 0, Math.PI * 2);
-  ctx.fillStyle = '#efe6c4'; ctx.fill();
-  ctx.fillStyle = 'rgba(120,100,70,0.35)';
-  ctx.beginPath(); ctx.arc(mx - 10, my - 6, 6, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(mx + 12, my + 10, 4, 0, Math.PI * 2); ctx.fill();
-
-  // Манан
-  FOG.forEach(f => {
-    const g = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.r);
-    g.addColorStop(0, 'rgba(160,140,200,0.09)');
-    g.addColorStop(1, 'rgba(160,140,200,0)');
-    ctx.fillStyle = g;
-    ctx.fillRect(f.x - f.r, f.y - f.r, f.r * 2, f.r * 2);
-  });
-
-  // Зам: сүүдэр, дараа нь гол зам, дараа нь гэрэлтсэн шугам
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  const roadPath = () => {
-    ctx.beginPath();
-    BOARD_PTS.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
-  };
-  ctx.globalAlpha = 0.5;
-  ctx.strokeStyle = '#000';
-  ctx.lineWidth = 42;
-  ctx.save(); ctx.translate(5, 6); roadPath(); ctx.stroke(); ctx.restore();
-  ctx.globalAlpha = 1;
-  ctx.strokeStyle = '#3a2d52';
-  ctx.lineWidth = 36;
-  roadPath(); ctx.stroke();
-  ctx.strokeStyle = '#5a4a78';
-  ctx.lineWidth = 2;
-  ctx.setLineDash([8, 10]);
-  roadPath(); ctx.stroke();
-  ctx.setLineDash([]);
-
-  // Чимэглэл
-  BOARD_FILL.forEach(d => DRAW[d.t](ctx, d.x, d.y, d.s));
-
-  // Нүднүүд
-  BOARD_PTS.forEach((p, i) => {
-    if (i === LAST) return;
-    const kind = i === 0 ? 'start' : BOARD_KINDS[i];
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, 12, 0, Math.PI * 2);
-    ctx.fillStyle = i === 0 ? '#3b2f4f' : TILE_COLOR[kind];
-    ctx.fill();
-    ctx.strokeStyle = kind === 'plain' || i === 0 ? '#8c79ad' : '#ffd08a';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-    if (i === 0) {
-      ctx.fillStyle = '#fff'; ctx.font = 'bold 11px sans-serif';
-      ctx.fillText('S', p.x, p.y + 1);
-    } else {
-      drawTileIcon(ctx, kind, p.x, p.y);
-    }
-  });
-
-  // Гарц (шилтгээн)
-  const goal = BOARD_PTS[LAST];
-  DRAW.castle(ctx, goal.x, goal.y + 8, 0.9);
-
-  // Тоглогчдын дүрс
-  G.players.forEach((pl, i) => {
-    const base = BOARD_PTS[pl.pos];
-    const x = base.x + OFF[i][0];
-    const y = base.y + OFF[i][1] + 10;
-    if (i === G.cur && G.status === 'playing') {
-      ctx.beginPath();
-      ctx.arc(x, y - 10, 17, 0, Math.PI * 2);
-      ctx.strokeStyle = '#fff';
-      ctx.setLineDash([3, 3]);
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
-    DRAW[pl.avatar](ctx, x, y, 0.9);
-    ctx.font = 'bold 11px sans-serif';
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = '#000';
-    ctx.strokeText(pl.name, x, y - 36);
-    ctx.fillStyle = pl.color;
-    ctx.fillText(pl.name, x, y - 36);
-  });
-}
 
 function followCurrent() {
   if (G.status !== 'playing') return;
@@ -1421,17 +1300,35 @@ function initFirebase() {
   } catch (e) { return null; }
 }
 
-function makeId() {
-  let id = sessionStorage.getItem('sz_id');
-  if (!id) { id = 'p' + Math.random().toString(36).slice(2, 10); sessionStorage.setItem('sz_id', id); }
-  return id;
+  function makeId() {
+  try {
+    let id = sessionStorage.getItem('sz_id');
+    if (!id) { id = 'p' + Math.random().toString(36).slice(2, 10); sessionStorage.setItem('sz_id', id); }
+    return id;
+  } catch (e) {
+    return 'p' + Math.random().toString(36).slice(2, 10);
+  }
 }
 
 function init() {
+  // Дүрийн жагсаалт болон товчнуудыг хамгийн түрүүнд холбоно
+  buildAvatars();
+  $('joinBtn').onclick = actJoin;
+  $('startBtn').onclick = actStart;
+  $('rollBtn').onclick = actRoll;
+  $('restartBtn').onclick = actRestart;
+  $('copyBtn').onclick = () => {
+    const url = location.href;
+    if (navigator.clipboard) navigator.clipboard.writeText(url).then(() => { $('err').textContent = 'Линк хуулагдлаа'; });
+    else $('err').textContent = url;
+  };
+  $('muteBtn').onclick = () => { setMuted(!muted); render(); };
+  document.addEventListener('pointerdown', () => audioInit(), { once: true });
+
   code = (location.hash.slice(1) || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
   if (!code) {
     code = Math.random().toString(36).slice(2, 6).toUpperCase();
-    location.hash = code;
+    try { location.hash = code; } catch (e) { /* хаягийг өөрчилж чадахгүй бол алгасна */ }
   }
   myId = makeId();
 
@@ -1446,22 +1343,6 @@ function init() {
       render();
     }, () => { $('err').textContent = 'Холболт тасарлаа'; });
   }
-
-  buildAvatars();
-  $('joinBtn').onclick = actJoin;
-  $('startBtn').onclick = actStart;
-  $('rollBtn').onclick = actRoll;
-  $('restartBtn').onclick = actRestart;
-  $('copyBtn').onclick = () => {
-    const url = location.href;
-    if (navigator.clipboard) navigator.clipboard.writeText(url).then(() => { $('err').textContent = 'Линк хуулагдлаа'; });
-    else $('err').textContent = url;
-  };
-  $('muteBtn').onclick = () => {
-    setMuted(!muted);
-    render();
-  };
-  document.addEventListener('pointerdown', () => audioInit(), { once: true });
 
   render();
 }
