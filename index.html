@@ -62,9 +62,6 @@ aside{background:#1a1328ee;border:1px solid #6b5a86;border-radius:14px;padding:1
     <input id="nameIn" maxlength="12" placeholder="Таны нэр">
     <button id="joinBtn">Нэгдэх</button>
   </div>
-    $('lobbyPlayers').innerHTML = G.players.map(p =>
-    `<div class="pl"><i style="background:${p.color}"></i>${esc(ART.AVATAR_NAMES[p.avatar])} · ${esc(p.name)}${p.id === G.hostId ? ' (эзэн)' : ''}</div>`
-  ).join('') || '<em>Хэн ч нэгдээгүй байна</em>';
   <p>Тоглогчид:</p>
   <div id="lobbyPlayers"></div>
   <button id="startBtn" hidden>Тоглоом эхлүүлэх</button>
@@ -1232,7 +1229,7 @@ function renderLobby() {
     b.disabled = G.players.some(p => p.avatar === b.dataset.a);
   });
   $('lobbyPlayers').innerHTML = G.players.map(p =>
-    <div class="pl"><i style="background:${p.color}"></i>${esc(ART.AVATAR_NAMES[p.avatar])} · ${esc(p.name)}${p.id === G.hostId ? ' (эзэн)' : ''}</div>
+    `<div class="pl"><i style="background:${p.color}"></i>${esc(ART.AVATAR_NAMES[p.avatar])} · ${esc(p.name)}${p.id === G.hostId ? ' (эзэн)' : ''}</div>`
   ).join('') || '<em>Хэн ч нэгдээгүй байна</em>';
   const joined = online ? G.players.some(p => p.id === myId) : false;
   $('joinRow').hidden = online && (joined || G.players.length >= 5);
