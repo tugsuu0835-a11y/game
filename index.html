@@ -1478,15 +1478,10 @@ function init() {
 }
 
 init();
-  /* ===================================================================
- * Сүнсний зам — засвар (sunsenzam-fix.js)
- * Суулгах: index.html дээрх ГОЛ <script>-ийн дараа, </body>-ийн өмнө нэг мөр нэмнэ:
- *   <script src="sunsenzam-fix.js"></script>
- * Гол кодыг устгахгүй. Дараах функцүүдийг дахин тодорхойлж солино:
- *   buildScene (квадрат нүд), drawBoard (дүрийн байрлал), rollP (шинэ нүдний төрөл),
- *   render (попап, D14-ийг нэмж ороов). Мөн шинэ D14 шидэт шоо нэмнэ.
- * =================================================================== */
-(function () {
+</script>
+
+<script src="sunsenzam-fix.js"></script>
+  (function () {
   'use strict';
   const TAU = Math.PI * 2;
   const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV'];
@@ -1859,6 +1854,6 @@ init();
     requestAnimationFrame(step);
   }
 })();
-</script>
+
 </body>
 </html>
