@@ -48,6 +48,8 @@ aside{background:#1a1328ee;border:1px solid #6b5a86;border-radius:14px;padding:1
   main{grid-template-columns:1fr}
   #boardWrap{height:60vh}
 }
+#rollDice{perspective:700px}
+.die{will-change:transform}
 </style>
 </head>
 <body>
@@ -533,7 +535,7 @@ function drawBoard() {
   ctx.textBaseline = 'middle';
 
   G.players.forEach((pl, i) => {
-    const base = BOARD_PTS[pl.pos];
+    const base = pointAt(VIS[pl.id] ?? pl.pos);
     const x = base.x + OFF[i][0];
     const y = base.y + OFF[i][1] + 10;
     if (i === G.cur && G.status === 'playing') {
@@ -1034,6 +1036,7 @@ function rollP(G, a, b) {
   const p = s.players[s.cur];
   const t = a + b;
   s.dice = [a, b];
+  s.rollId = (G.rollId || 0) + 1;
   p.pos = Math.min(p.pos + t, LAST);
   const note = `${p.name}: ${a}+${b}=${t}`;
   setFx(s, 'rattle');
@@ -1118,15 +1121,167 @@ let code = '';
 let selAvatar = ART.AVATAR_TYPES[0];
 let lastVer = -1;
 let firstSnap = true;
-let rolling = false, spinTimer = null, rollTimer = null, lastRollId = -1;
-  
+let lastRollId = null;   // сүүлд харуулсан шооны дугаар (null = хараахан мэдэгдээгүй)
+
+// ---------- Анимацийн удирдлага ----------
+const APPEAR_MS = 350;   // шоо гарч ирэх
+const SPIN_MS = 1800;    // эргэлдэж, үсрэх
+const RESULT_MS = 800;   // үр дүнг харуулах
+const VANISH_MS = 400;   // жижигрээд алга болох
+const STEP_MS = 170;     // дүр нэг нүд нүүх хугацаа
+
+let VIS = {};            // тоглогч бүрийн дэлгэц дээрх байрлал (нүдний индекс)
+let pending = 0;         // дуусаагүй анимацийн тоо. 0 биш үед шинэ шоо хаяхыг хориглоно
+let SEQ = Promise.resolve();
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// Анимацийг дараалалд оруулна: өмнөхөө дуустал хүлээнэ, ингэснээр давхцахгүй.
+// Алдаа гарсан ч pending буурч, тоглоом гацахгүй.
+function enqueue(task) {
+  pending++;
+  SEQ = SEQ
+    .then(task)
+    .catch(err => console.error('Анимацийн алдаа:', err))
+    .then(() => {
+      pending--;
+      try { render(); } catch (err) { console.error(err); }
+    });
+}
+
+// Эргэлтийн хэлбэр. Эцсийн эргэлт нь 360-ийн үржвэр тул шоо эцэстээ дээш харна.
+function spinFrames() {
+  const X = 3 + Math.floor(Math.random() * 3);
+  const Y = 4 + Math.floor(Math.random() * 3);
+  const Z = 2 + Math.floor(Math.random() * 2);
+  const ease = 'cubic-bezier(.22,.6,.3,1)';
+  const kf = (offset, lift, k) => ({
+    offset,
+    easing: ease,
+    transform: `translateY(${lift}px) rotateX(${360 * X * k}deg) rotateY(${360 * Y * k}deg) rotateZ(${360 * Z * k}deg)`
+  });
+  return [
+    kf(0, 0, 0),
+    kf(0.3, -90, 0.4),
+    kf(0.5, 0, 0.7),
+    kf(0.7, -45, 0.85),
+    kf(0.85, 0, 0.95),
+    kf(0.93, -12, 0.99),
+    kf(1, 0, 1)
+  ];
+}
+
+// Шоо: гарч ирэх → эргэлдэх → үр дүн → жижгэрч алга болох
+async function playDice(dice) {
+  const ov = $('rollOverlay'), box = $('rollDice'), msg = $('rollMsg');
+  let flicker = null, spins = [];
+  box.innerHTML = `<div class="die">${dieSVG(1)}</div><div class="die">${dieSVG(1)}</div>`;
+  const dies = [...box.querySelectorAll('.die')];
+  msg.textContent = '';
+  ov.hidden = false;
+  try {
+    // 1. Гарч ирэх
+    await Promise.all(dies.map(d => d.animate(
+      [{ opacity: 0, transform: 'scale(0.3)' }, { opacity: 1, transform: 'scale(1)' }],
+      { duration: APPEAR_MS, easing: 'cubic-bezier(.2,.8,.2,1)' }
+    ).finished));
+
+    // 2. Эргэлдэж, үсэрч, аажим удаашрана. Түр тоо харуулна.
+    flicker = setInterval(() => {
+      box.querySelectorAll('text').forEach(t => { t.textContent = rollDie(); });
+    }, 80);
+    spins = dies.map(d => d.animate(spinFrames(), { duration: SPIN_MS, fill: 'forwards' }));
+    await Promise.all(spins.map(s => s.finished));
+    clearInterval(flicker); flicker = null;
+
+    // 3. Эцсийн үр дүн: тоглоомд ашиглагдах утгатай яг таарна
+    dies.forEach((d, i) => { d.innerHTML = dieSVG(dice[i]); });
+    msg.textContent = `${dice[0]} + ${dice[1]} = ${dice[0] + dice[1]}`;
+    await sleep(RESULT_MS);
+
+    // 4. Жижигрээд бүрэн алга болно
+    spins.forEach(s => s.cancel());
+    spins = [];
+    await Promise.all(dies.map(d => d.animate(
+      [{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(0.2)' }],
+      { duration: VANISH_MS, easing: 'ease-in', fill: 'forwards' }
+    ).finished));
+  } finally {
+    // Алдаа гарсан ч шооны цонх бүрэн нуугдаж, төлөв цэвэрлэгдэнэ
+    if (flicker) clearInterval(flicker);
+    spins.forEach(s => s.cancel());
+    box.innerHTML = '';
+    msg.textContent = '';
+    ov.hidden = true;
+  }
+}
+
+// Нэг нүдний хөдөлгөөн: from-ээс to руу rAF-ээр жигд
+function tween(from, to, ms, onFrame) {
+  return new Promise(resolve => {
+    const t0 = performance.now();
+    const tick = now => {
+      const k = Math.max(0, Math.min(1, (now - t0) / ms));
+      onFrame(from + (to - from) * k);
+      if (k < 1) requestAnimationFrame(tick); else resolve();
+    };
+    requestAnimationFrame(tick);
+  });
+}
+
+// Бутархай индекс (жишээ нь 12.5) дээрх координат: хоёр нүдний хооронд шугаман
+function pointAt(f) {
+  const i = Math.max(0, Math.min(LAST, Math.floor(f)));
+  const j = Math.min(LAST, i + 1);
+  const t = Math.max(0, Math.min(1, f - i));
+  const a = BOARD_PTS[i], b = BOARD_PTS[j];
+  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+}
+
+function followPoint(pt) {
+  const w = $('boardWrap');
+  w.scrollTo({ top: pt.y - w.clientHeight / 2, left: Math.max(0, pt.x - w.clientWidth / 2) });
+}
+
+// Дүрийг нүд нүдээр алхуулна. Төгсгөлийн байрлал G.players-оос уншина.
+async function walkPiece(id) {
+  for (;;) {
+    const pl = G.players.find(p => p.id === id);
+    const from = VIS[id];
+    if (!pl || from === pl.pos) return;
+    const step = from + (pl.pos > from ? 1 : -1);
+    await tween(from, step, STEP_MS, v => {
+      VIS[id] = v;
+      drawBoard();
+      followPoint(pointAt(v));
+    });
+    VIS[id] = step;
+  }
+}
+
+async function walkAll() {
+  for (const p of G.players.slice()) {
+    if (VIS[p.id] === undefined) VIS[p.id] = p.pos;
+    await walkPiece(p.id);
+  }
+}
+
+// Шооны дараалал: эхлээд шоо бүрэн алга болно, дараа нь дүр нүүнэ
+function rollTask(dice) {
+  return async () => {
+    await playDice(dice);
+    await walkAll();
+  };
+}
+
+// ---------- Төлөв, холболт (тоглогчийн үйлдэл) ----------
 function isCur(id) { const p = G.players[G.cur]; return !!p && p.id === id; }
 function canRoll() {
-  if (G.status !== 'playing' || G.phase !== 'roll') return false;
+  if (pending > 0 || G.status !== 'playing' || G.phase !== 'roll') return false;
   return !online || isCur(myId);
 }
 function canAnswer() {
-  if (G.status !== 'playing' || G.phase !== 'question') return false;
+  if (pending > 0 || G.status !== 'playing' || G.phase !== 'question') return false;
   return !online || isCur(myId);
 }
 
@@ -1155,38 +1310,15 @@ function actJoin() {
   dispatch(joinP, [id, name, selAvatar]);
 }
 function actStart() { if (!online || G.hostId === myId) dispatch(startP, []); }
-function showSpin() {
-  $('rollOverlay').hidden = false;
-  $('rollMsg').textContent = '';
-  $('rollDice').innerHTML = dieSVG(1) + dieSVG(1);
-  $('rollDice').querySelectorAll('svg').forEach(s => s.classList.add('spin'));
-  spinTimer = setInterval(() => {
-    $('rollDice').querySelectorAll('text').forEach(t => t.textContent = rollDie());
-  }, 90);
-}
-
-function showResult(dice, msg) {
-  clearInterval(spinTimer); spinTimer = null;
-  clearTimeout(rollTimer);
-  $('rollDice').innerHTML = dieSVG(dice[0]) + dieSVG(dice[1]);
-  $('rollMsg').textContent = msg;
-  $('rollOverlay').hidden = false;
-  rollTimer = setTimeout(() => { $('rollOverlay').hidden = true; }, 2500);
-}
-
 function actRoll() {
-  if (!canRoll() || rolling) return;
-  rolling = true;
-  showSpin();
-  setTimeout(() => {
-    clearInterval(spinTimer); spinTimer = null;
-    rolling = false;
-    if (!canRoll()) { $('rollOverlay').hidden = true; return; }
-    dispatch(rollP, [rollDie(), rollDie()]);
-  }, 1200);
+  if (!canRoll()) return;
+  dispatch(rollP, [rollDie(), rollDie()]);
 }
 function actAnswer(i) { if (canAnswer()) dispatch(answerP, [i]); }
-function actRestart() { if (!online || G.hostId === myId) dispatch(restartP, []); }
+function actRestart() {
+  if (pending > 0) return;
+  if (!online || G.hostId === myId) dispatch(restartP, []);
+}
 
 // ---------- Дэлгэц ----------
 function dieSVG(v) {
@@ -1203,19 +1335,26 @@ function render() {
   $('lobby').hidden = !lobby;
   $('game').hidden = lobby;
   $('roomCode').textContent = code;
+
+  // Дүр бүрийн харагдах байрлалыг бүртгэнэ.
+  // Шоо хаяхгүй үед (эхлэх, дахин тоглох) шууд байрлалд нь тавина.
+  G.players.forEach(p => { if (VIS[p.id] === undefined || !G.dice) VIS[p.id] = p.pos; });
+
+  // 1. Шинэ шоо хаясан бол шооны анимац дараалалд орно
+  if (G.rollId !== undefined) {
+    if (lastRollId !== null && G.rollId > lastRollId && G.dice) enqueue(rollTask(G.dice));
+    lastRollId = G.rollId;
+  }
+  // 2. Харагдах байрлал нь төлөвөөс ялгаатай бол (шийтгэлийн ухралт гэх мэт) алхуулна
+  if (pending === 0 && G.players.some(p => VIS[p.id] !== p.pos)) enqueue(walkAll);
+
+  // Дэлгэцийг анимацийн төлөвт тохируулж зурна (дээрх enqueue-ийн дараа)
   if (lobby) renderLobby(); else renderGame();
   if (!lobby) drawBoard();
 
   if (G.ver !== lastVer) {
     if (!firstSnap) playFx(G.fx);
     lastVer = G.ver;
-    if (!lobby && !firstSnap) followCurrent();
-  }
-
-  // Шоо хаясны дараа үр дүн, мэдэгдэл голд гарна (бүх тоглогчид харна)
-  if (G.rollId !== undefined && G.rollId !== lastRollId) {
-    lastRollId = G.rollId;
-    if (!firstSnap && G.dice) showResult(G.dice, G.msg);
   }
   firstSnap = false;
 }
@@ -1232,6 +1371,7 @@ function renderLobby() {
   $('joinRow').hidden = online && (joined || G.players.length >= 5);
   $('startBtn').hidden = !(G.players.length >= 2 && (!online || G.hostId === myId));
 }
+
 function renderGame() {
   $('players').innerHTML = G.players.map((p, i) =>
     `<div class="pl ${i === G.cur && G.status === 'playing' ? 'cur' : ''}"><i style="background:${p.color}"></i>${esc(ART.AVATAR_NAMES[p.avatar])} · ${esc(p.name)} · ${p.pos}/${LAST}${p.skip ? ' (гяндан)' : ''}</div>`
@@ -1239,10 +1379,11 @@ function renderGame() {
   $('dice').innerHTML = G.dice ? dieSVG(G.dice[0]) + dieSVG(G.dice[1]) : '';
   $('message').textContent = G.msg;
   $('rollBtn').disabled = !canRoll();
-  $('restartBtn').hidden = G.status !== 'over' || (online && G.hostId !== myId);
+  $('restartBtn').hidden = G.status !== 'over' || pending > 0 || (online && G.hostId !== myId);
   $('muteBtn').textContent = muted ? 'Дуу: унтраасан' : 'Дуу: асаалттай';
 
-  const showQ = G.status === 'playing' && G.phase === 'question' && G.q !== null;
+  // Асуулт нь дүр нүүж дууссаны дараа л гарна
+  const showQ = G.status === 'playing' && G.phase === 'question' && G.q !== null && pending === 0;
   $('modal').hidden = !showQ;
   if (showQ) {
     const q = QUESTIONS[G.q];
@@ -1262,14 +1403,6 @@ function renderGame() {
       $('qWait').textContent = `${ART.AVATAR_NAMES[me.avatar]} ${me.name} хариулж байна…`;
     }
   }
-}
-
-
-
-function followCurrent() {
-  if (G.status !== 'playing') return;
-  const p = BOARD_PTS[G.players[G.cur].pos];
-  $('boardWrap').scrollTo({ top: p.y - 300, left: Math.max(0, p.x - 300), behavior: 'smooth' });
 }
 
 // ---------- Эхлүүлэх ----------
@@ -1294,7 +1427,7 @@ function initFirebase() {
   } catch (e) { return null; }
 }
 
-  function makeId() {
+function makeId() {
   try {
     let id = sessionStorage.getItem('sz_id');
     if (!id) { id = 'p' + Math.random().toString(36).slice(2, 10); sessionStorage.setItem('sz_id', id); }
@@ -1345,7 +1478,6 @@ function init() {
 }
 
 init();
-
 </script>
 </body>
 </html>
