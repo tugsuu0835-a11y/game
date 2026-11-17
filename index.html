@@ -1509,26 +1509,72 @@ init();
   const FWD = { fwd2: 2, fwd3: 3};
   const LBL = { fwd2: '+2', fwd3: '+3', roll: '↻', back2: '?', back3: '?', back4: '?', back5: '?', back6: '?', jail: 'Г', dare: '!', win: '★' };
 
-  /* ---------- 3. Хоосон нүдгүй болгох: 500 шагнал / 500 шийтгэл ---------- */
-  BOARD_KINDS[LAST] = 'win';                       // гарц = шагнал (хүрсэн тоглогч хожино)
-  const pool = [];
-  let R = 1, P = 0;                                // R-д гарцыг тооцсон
-  for (let i = 0; i < LAST; i++) {
-    const k = BOARD_KINDS[i];
-    if (k === 'plain') pool.push(i);
-    else if (REWARD.includes(k)) R++;
-    else P++;
-  }
-  const rnd = mulberry32(777);                     // тогтмол seed: нүд бүр нэг л удаа оноогдоно
-  for (let i = pool.length - 1; i > 0; i--) {
-    const j = Math.floor(rnd() * (i + 1));
-    const t = pool[i]; pool[i] = pool[j]; pool[j] = t;
-  }
-  const needR = TOTAL / 2 - R;                     // шагнал болгох хоосон нүдний тоо
-  pool.forEach((idx, n) => {
-    if (n < needR) BOARD_KINDS[idx] = n % 2 === 0 ? 'fwd2' : 'fwd3';
-    else BOARD_KINDS[idx] = 'dare';                // шийтгэл: гүйцэтгэх даалгавар
-  });
+/* ---------- 3. Нүдний харьцаа: 25% шагнал / 75% шийтгэл ---------- */
+
+BOARD_KINDS[LAST] = 'win';
+
+// 1000 нүдний төрөл
+const rewardCount = Math.round(TOTAL * 0.25) - 1;
+const questionCount = Math.round(TOTAL * 0.50);
+const otherCount = TOTAL - 1 - rewardCount - questionCount;
+
+// Төгсгөлийн нүднээс бусад бүх нүдийг цуглуулах
+const pool = [];
+
+for (let i = 0; i < TOTAL; i++) {
+  if (i !== LAST) pool.push(i);
+}
+
+// Нүднүүдийг санамсаргүй хольж байрлуулах
+const rnd = mulberry32(777);
+
+for (let i = pool.length - 1; i > 0; i--) {
+  const j = Math.floor(rnd() * (i + 1));
+  const temp = pool[i];
+  pool[i] = pool[j];
+  pool[j] = temp;
+}
+
+let pos = 0;
+
+// 25% шагнал
+const rewardTypes = ['fwd2', 'fwd3', 'fwd4', 'fwd5', 'roll'];
+
+for (let i = 0; i < rewardCount; i++) {
+  BOARD_KINDS[pool[pos++]] =
+    rewardTypes[i % rewardTypes.length];
+}
+
+// 50% асуулттай шийтгэл
+const questionTypes = ['back2', 'back3'];
+
+for (let i = 0; i < questionCount; i++) {
+  BOARD_KINDS[pool[pos++]] =
+    questionTypes[i % questionTypes.length];
+}
+
+// 25% бусад шийтгэл
+const otherTypes = ['jail', 'dare'];
+
+for (let i = 0; i < otherCount; i++) {
+  BOARD_KINDS[pool[pos++]] =
+    otherTypes[i % otherTypes.length];
+}
+
+// Нүд бүрийн даалгаврыг үүсгэх
+const TILE_TASK = BOARD_KINDS.map((k, i) => {
+  const t = TASKS[k];
+
+  return {
+    kind: k,
+    type: t.type,
+    title: t.title,
+    text: k === 'dare'
+      ? DARES[i % DARES.length]
+      : t.text
+  };
+});
+
   const TILE_TASK = BOARD_KINDS.map((k, i) => {
     const t = TASKS[k];
     return { kind: k, type: t.type, title: t.title, text: k === 'dare' ? DARES[i % DARES.length] : t.text };
