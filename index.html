@@ -1484,6 +1484,27 @@ function renderGame() {
   }
 }
 
+function buildAvatars() {
+  const box = $('avatars');
+
+  ART.AVATAR_TYPES.forEach(type => {
+    const b = document.createElement('button');
+
+    b.className = 'av';
+    b.dataset.a = type;
+    b.title = ART.AVATAR_NAMES[type];
+
+    b.appendChild(ART.avatarCanvas(type, 56));
+
+    b.onclick = () => {
+      selAvatar = type;
+      renderLobby();
+    };
+
+    box.appendChild(b);
+  });
+}
+
 // ---------- Эхлүүлэх ----------
 function buildAvatars() {
   const box = $('avatars');
