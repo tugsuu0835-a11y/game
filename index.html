@@ -1257,69 +1257,6 @@ function enqueue(task) {
       try { render(); } catch (err) { console.error(err); }
     });
 }
-
-// Эргэлтийн хэлбэр. Эцсийн эргэлт нь 360-ийн үржвэр тул шоо эцэстээ дээш харна.
-function spinFrames() {
-  const X = 3 + Math.floor(Math.random() * 3);
-  const Y = 4 + Math.floor(Math.random() * 3);
-  const Z = 2 + Math.floor(Math.random() * 2);
-  const ease = 'cubic-bezier(.22,.6,.3,1)';
-  const kf = (offset, lift, k) => ({
-    offset,
-    easing: ease,
-    transform: `translateY(${lift}px) rotateX(${360 * X * k}deg) rotateY(${360 * Y * k}deg) rotateZ(${360 * Z * k}deg)`
-  });
-  return [
-    kf(0, 0, 0),
-    kf(0.3, -90, 0.4),
-    kf(0.5, 0, 0.7),
-    kf(0.7, -45, 0.85),
-    kf(0.85, 0, 0.95),
-    kf(0.93, -12, 0.99),
-    kf(1, 0, 1)
-  ];
-}
-
-// Шоо: гарч ирэх → эргэлдэх → зогсох → алга болох → мэдэгдэл → дараа нь дүр нүүнэ
-async function playDice(dice) {
-  const ov = $('rollOverlay'), box = $('rollDice');
-  let flicker = null, spins = [];
-  box.innerHTML = `<div class="die">${dieSVG(1)}</div><div class="die">${dieSVG(1)}</div>`;
-  const dies = [...box.querySelectorAll('.die')];
-  ov.hidden = false;
-  try {
-    // 1. Гарч ирэх
-    await Promise.all(dies.map(d => d.animate(
-      [{ opacity: 0, transform: 'scale(0.3)' }, { opacity: 1, transform: 'scale(1)' }],
-      { duration: APPEAR_MS, easing: 'cubic-bezier(.2,.8,.2,1)' }
-    ).finished));
-
-    // 2. Эргэлдэж, зогсоно
-    flicker = setInterval(() => {
-      box.querySelectorAll('text').forEach(t => { t.textContent = rollDie(); });
-    }, 80);
-    spins = dies.map(d => d.animate(spinFrames(), { duration: SPIN_MS, fill: 'forwards' }));
-    await Promise.all(spins.map(s => s.finished));
-    clearInterval(flicker); flicker = null;
-
-    // 3. Эцсийн тоо (тоглоомын үнэн утгатай яг таарна)
-    dies.forEach((d, i) => { d.innerHTML = dieSVG(dice[i]); });
-    await sleep(300);
-
-    // 4. Шоо бүрэн алга болно
-    spins.forEach(s => s.cancel());
-    spins = [];
-    await Promise.all(dies.map(d => d.animate(
-      [{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(0.2)' }],
-      { duration: VANISH_MS, easing: 'ease-in', fill: 'forwards' }
-    ).finished));
-  } finally {
-    if (flicker) clearInterval(flicker);
-    spins.forEach(s => s.cancel());
-    box.innerHTML = '';
-    ov.hidden = true;
-  }
-
   // 5–8. Мэдэгдэл гарч ирж, харагдаад, алга болтол хүлээнэ
   await showNotice(dice);
 }
@@ -1416,9 +1353,11 @@ async function walkAll() {
 }
 
 // Шооны дараалал: эхлээд шоо бүрэн алга болно, дараа нь дүр нүүнэ
+// 3D шоо хаягдсаны дараа үр дүнг харуулж,
+// дараа нь тоглогчийг нүүлгэнэ.
 function rollTask(dice) {
   return async () => {
-    await playDice(dice);
+    await showNotice(dice);
     await walkAll();
   };
 }
@@ -1470,14 +1409,6 @@ function actRestart() {
 }
 
 // ---------- Дэлгэц ----------
-function dieSVG(v) {
-  const pts = [];
-  for (let k = 0; k < 14; k++) {
-    const a = -Math.PI / 2 + k * 2 * Math.PI / 14;
-    pts.push((Math.cos(a) * 34).toFixed(1) + ',' + (Math.sin(a) * 34).toFixed(1));
-  }
-  return `<svg viewBox="-38 -38 76 76" width="76" height="76"><polygon points="${pts.join(' ')}" fill="#f3e7d3" stroke="#ff8a1f" stroke-width="3"/><text y="7" text-anchor="middle" font-size="22" font-weight="bold" fill="#140f1f">${v}</text></svg>`;
-}
 
 function render() {
   const lobby = G.status === 'lobby';
@@ -1525,7 +1456,6 @@ function renderGame() {
   $('players').innerHTML = G.players.map((p, i) =>
     `<div class="pl ${i === G.cur && G.status === 'playing' ? 'cur' : ''}"><i style="background:${p.color}"></i>${esc(ART.AVATAR_NAMES[p.avatar])} · ${esc(p.name)} · ${p.pos}/${LAST}${p.skip ? ' (гяндан)' : ''}</div>`
   ).join('');
-  $('dice').innerHTML = G.dice ? dieSVG(G.dice[0]) + dieSVG(G.dice[1]) : '';
   $('message').textContent = G.msg;
   $('rollBtn').disabled = !canRoll();
   $('restartBtn').hidden = G.status !== 'over' || pending > 0 || (online && G.hostId !== myId);
@@ -1679,6 +1609,7 @@ BOARD_KINDS[0] = 'plain'; // эхлэх нүд
 });
 
 </script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
   <script>
 (function () {
   const css = `
@@ -1742,8 +1673,10 @@ BOARD_KINDS[0] = 'plain'; // эхлэх нүд
   const CH = 250;
   const scene = new T.Scene();
   const cam = new T.PerspectiveCamera(30, 1, 0.1, 50);
-  cam.position.set(0, 5.4, 6.2);
-  cam.lookAt(0, 0.6, 0);
+
+// Шооны хажуу болон дээд нүүрийг илүү тод харуулах өнцөг
+cam.position.set(0, 3.2, 7.5);
+cam.lookAt(0, 0.6, 0);
   function resize() {
     const w = cv.clientWidth || 240;
     renderer.setSize(w, CH, false);
@@ -1880,7 +1813,7 @@ BOARD_KINDS[0] = 'plain'; // эхлэх нүд
   EDGES.forEach(([a, b]) => {
     const A = V[a], B = V[b];
     const dir = B.clone().sub(A);
-    const m = new T.Mesh(new T.CylinderGeometry(0.028, 0.028, dir.length(), 6), EDGE_MAT);
+    new T.CylinderGeometry(0.04, 0.04, dir.length(), 8)
     m.position.copy(A).add(B).multiplyScalar(0.5);
     m.quaternion.setFromUnitVectors(UP, dir.normalize());
     die.add(m);
