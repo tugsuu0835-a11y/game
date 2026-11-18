@@ -50,6 +50,29 @@ aside{background:#1a1328ee;border:1px solid #6b5a86;border-radius:14px;padding:1
 }
 #rollDice{perspective:700px}
 .die{will-change:transform}
+  /* ===== Шооны мэдэгдэл ===== */
+#diceNotice{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;pointer-events:none;z-index:6}
+.dn-card{position:relative;width:min(92vw,380px);box-sizing:border-box;padding:34px 22px 20px;border-radius:18px;text-align:center;color:#fbe9d0;font-family:Georgia,"Times New Roman",serif;background:radial-gradient(ellipse at 50% 0%,#4a1f6e,#1d0f33 55%,#0a0512);border:2px solid #ff7a1a;box-shadow:0 0 28px #ff7a1a99,0 0 70px #7cff9a33;opacity:0;transform:scale(.4)}
+.dn-card::before{content:"";position:absolute;inset:8px;border:1px solid #ff7a1a66;border-radius:12px;pointer-events:none}
+.dn-card.show{animation:dnIn .45s cubic-bezier(.2,.9,.3,1.25) forwards,dnGlow 2.2s ease-in-out .45s infinite}
+.dn-card.hide{animation:dnOut .4s ease-in forwards}
+@keyframes dnIn{0%{opacity:0;transform:scale(.4) rotate(-4deg)}70%{opacity:1;transform:scale(1.05) rotate(0)}100%{opacity:1;transform:scale(1)}}
+@keyframes dnOut{to{opacity:0;transform:scale(.7)}}
+@keyframes dnGlow{0%,100%{box-shadow:0 0 22px #ff7a1a77,0 0 60px #7cff9a22}50%{box-shadow:0 0 40px #ff7a1acc,0 0 90px #7cff9a55}}
+.dn-title{font-size:clamp(15px,4.2vw,19px);letter-spacing:3px;color:#ffb36b;text-shadow:0 0 10px #ff7a1a;margin-bottom:6px}
+.dn-row{display:flex;align-items:center;justify-content:center;gap:14px}
+.dn-num{font-size:clamp(56px,18vw,80px);font-weight:bold;line-height:1.1;color:#8dff9f;text-shadow:0 0 14px #7cff9a,0 0 32px #3dff7a}
+.dn-plus{font-size:30px;color:#c9a8ff;text-shadow:0 0 10px #8a4dff}
+.dn-sum{margin-top:4px;font-size:18px;color:#d9c7f2}
+.dn-sum b{margin-left:6px;font-size:clamp(34px,10vw,44px);color:#ff8a1f;text-shadow:0 0 14px #ff8a1f}
+.dn-deco-row{display:flex;justify-content:center;align-items:flex-end;gap:16px;margin-top:12px;height:34px}
+.dn-deco-row svg{filter:drop-shadow(0 0 6px #ff9a3c88)}
+.d-web-l{position:absolute;top:-2px;left:-2px}
+.d-web-r{position:absolute;top:-2px;right:-2px;transform:scaleX(-1)}
+.d-bat{position:absolute;top:-14px;left:50%;transform:translateX(-50%)}
+.dn-spark{position:absolute;left:50%;top:50%;width:5px;height:5px;border-radius:50%;box-shadow:0 0 8px #7cff9a;opacity:0;pointer-events:none;animation:dnSpark 1.5s ease-out forwards}
+@keyframes dnSpark{0%{opacity:0;transform:translate(0,0) scale(.4)}20%{opacity:1}100%{opacity:0;transform:translate(var(--dx),var(--dy)) scale(1)}}
+@media (max-width:480px){.dn-card{padding:30px 16px 16px}}
 </style>
 </head>
 <body>
@@ -95,6 +118,25 @@ aside{background:#1a1328ee;border:1px solid #6b5a86;border-radius:14px;padding:1
 <div id="rollOverlay" hidden>
   <div id="rollDice"></div>
   <div id="rollMsg"></div>
+</div>
+  <div id="diceNotice" hidden>
+  <div class="dn-card">
+    <svg class="dn-deco d-web-l" width="58" height="58" viewBox="0 0 60 60" aria-hidden="true"><g fill="none" stroke="#d8c8f0" stroke-opacity=".5"><path d="M0 0L60 60M0 0L60 30M0 0L30 60M0 0L56 16M0 0L16 56"/><path d="M0 12Q12 12 12 0M0 26Q26 26 26 0M0 40Q40 40 40 0"/></g></svg>
+    <svg class="dn-deco d-web-r" width="58" height="58" viewBox="0 0 60 60" aria-hidden="true"><g fill="none" stroke="#d8c8f0" stroke-opacity=".5"><path d="M0 0L60 60M0 0L60 30M0 0L30 60M0 0L56 16M0 0L16 56"/><path d="M0 12Q12 12 12 0M0 26Q26 26 26 0M0 40Q40 40 40 0"/></g></svg>
+    <svg class="dn-deco d-bat" width="54" height="27" viewBox="0 0 60 30" aria-hidden="true"><path d="M30 10Q22 0 10 4Q14 10 6 12Q14 14 18 13Q22 20 30 22Q38 20 42 13Q46 14 54 12Q46 10 50 4Q38 0 30 10Z" fill="#120818"/><circle cx="26" cy="12" r="1.6" fill="#ff7a1a"/><circle cx="34" cy="12" r="1.6" fill="#ff7a1a"/></svg>
+    <div class="dn-title">ШОО ҮГ ХЭЛЛЭЭ!</div>
+    <div class="dn-row">
+      <span class="dn-num" id="dnA"></span>
+      <span class="dn-plus">+</span>
+      <span class="dn-num" id="dnB"></span>
+    </div>
+    <div class="dn-sum">Нийт <b id="dnSum"></b></div>
+    <div class="dn-deco-row">
+      <svg width="16" height="34" viewBox="0 0 20 40" aria-hidden="true"><path d="M10 0c3 4 4 7 2 10-1 2-3 2-4 0-1-3-1-5 2-10z" fill="#ffb347"/><rect x="6" y="13" width="8" height="27" rx="1" fill="#e8dcb0"/></svg>
+      <svg width="36" height="32" viewBox="0 0 40 36" aria-hidden="true"><ellipse cx="20" cy="21" rx="16" ry="12" fill="#ff7a1a"/><ellipse cx="13" cy="21" rx="5" ry="11" fill="#e0590f"/><ellipse cx="27" cy="21" rx="5" ry="11" fill="#e0590f"/><rect x="18.5" y="4" width="3" height="7" rx="1" fill="#7cff9a"/><path d="M10 17l5 4-5 4zM30 17l-5 4 5 4z" fill="#1a0a14"/><path d="M14 30l3-4 3 2 3-2 3 4z" fill="#1a0a14"/></svg>
+      <svg width="16" height="34" viewBox="0 0 20 40" aria-hidden="true"><path d="M10 0c3 4 4 7 2 10-1 2-3 2-4 0-1-3-1-5 2-10z" fill="#ffb347"/><rect x="6" y="13" width="8" height="27" rx="1" fill="#e8dcb0"/></svg>
+    </div>
+  </div>
 </div>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
@@ -145,7 +187,8 @@ const QUESTIONS = [
 // Талбай: 1000 нүд, муруй зам. Seed тогтмол тул бүх тоглогч адил талбай харна.
 const TOTAL = 1000;
 const LAST = TOTAL - 1;
-const WORLD = { w: 1100, h: 2950 };
+const BOARD_K = 1.8; // замын масштаб (хэлбэр өөрчлөгдөхгүй, нүдний зай нэмэгдэнэ)
+const WORLD = { w: 1100 * BOARD_K, h: 2950 * BOARD_K };
 
 // Нүдний төрөл — нийт 100%: 50% хоосон, 50% шагнал/шийтгэл
 const KIND_WEIGHTS = [
@@ -205,7 +248,7 @@ function catmull(p0, p1, p2, p3, t) {
 }
 
 function buildPath() {
-  const ctrl = makeControlPoints();
+  const ctrl = makeControlPoints().map(([x, y]) => [x * BOARD_K, y * BOARD_K]);
   const dense = [];
   for (let j = 0; j < ctrl.length - 1; j++) {
     const p0 = ctrl[Math.max(j - 1, 0)], p1 = ctrl[j];
@@ -277,6 +320,24 @@ const FOG = (() => {
 })();
 
 const BOARD_PTS = buildPath();
+
+// ---- Нүдний геометр: автоматаар тооцоолно ----
+const PATH_LEN = BOARD_PTS.reduce((s, p, i) =>
+  i ? s + Math.hypot(p.x - BOARD_PTS[i - 1].x, p.y - BOARD_PTS[i - 1].y) : 0, 0);
+const SPACING = PATH_LEN / LAST;      // зэргэлдээ нүдний төвийн зай
+const TILE = SPACING * 0.86;          // дөрвөлжин нүдний тал
+const PIECE_BOX = TILE - 8;           // дүр багтах хайрцаг (ирмэгээс 4px зай)
+const PIECE_K = PIECE_BOX / 52;       // дүрийн хамгийн өндөр (шулам) ≈ 52 нэгж
+const AVATAR_CENTER = {               // дүр бүрийн биеийн төв (суурьнаас)
+  ghost: [0, -9], pumpkin: [0, -8], zombie: [0, -5], witch: [9, -14],
+  skeleton: [0, -7], bat: [0, -3], cat: [5, -7], vampire: [0, -6]
+};
+
+// Нүд замын чиглэлд эргэсэн дөрвөлжин байна (зэргэлдээ нүд огтлолцохгүй)
+function tileAngle(i) {
+  const a = BOARD_PTS[Math.max(0, i - 1)], b = BOARD_PTS[Math.min(LAST, i + 1)];
+  return Math.atan2(b.y - a.y, b.x - a.x);
+}
 const BOARD_KINDS = makeKinds();
 const BOARD_FILL = buildFill(BOARD_PTS);
 
@@ -284,7 +345,7 @@ const BOARD_FILL = buildFill(BOARD_PTS);
 // Суурь (x, y) нь объектын доод төв, s нь хэмжээ.
 // ===== ШИНЭ ОРЧИН: талбайг нэг удаа урьдчилан зурна =====
 const TAU = Math.PI * 2;
-const GLOW = { fwd4: '90,230,160', fwd5: '90,230,160', roll: '120,170,255', back2: '255,90,90', back3: '255,90,90', jail: '180,120,255' };
+const GLOW = { fwd2: '90,230,160', fwd3: '90,230,160', fwd4: '90,230,160', fwd5: '90,230,160', roll: '120,170,255', back2: '255,90,90', back3: '255,90,90', jail: '180,120,255' };
 let SCENE = null;
 
 function radialGlow(c, x, y, r, rgb, a) {
@@ -500,21 +561,42 @@ function buildScene() {
   road(); c.strokeStyle = '#4a3d5a'; c.lineWidth = 30; c.setLineDash([12, 4, 6, 6]); c.stroke(); c.setLineDash([]);
   road(); c.strokeStyle = 'rgba(190,170,220,0.12)'; c.lineWidth = 2; c.stroke();
 
-  // Нүднүүд: чулуун дискэнд гэрэлтэй ирмэг
+   // Нүднүүд: замын чиглэлд эргэсэн дөрвөлжин чулуун нүд
   BOARD_PTS.forEach((p, i) => {
     if (i === LAST) return;
     const k = i === 0 ? 'start' : BOARD_KINDS[i];
     const gl = GLOW[k];
-    if (gl) radialGlow(c, p.x, p.y, 22, gl, 0.4);
-    const sg = c.createRadialGradient(p.x - 4, p.y - 4, 1, p.x, p.y, 13);
-    sg.addColorStop(0, '#5d5470'); sg.addColorStop(1, '#17111f');
-    c.beginPath(); c.arc(p.x, p.y, 12, 0, TAU);
-    c.fillStyle = sg; c.fill();
-    c.strokeStyle = gl ? `rgba(${gl},0.95)` : '#6d5f82'; c.lineWidth = 1.5; c.stroke();
-    const label = i === 0 ? 'S' : TILE_LABEL[k];
-    if (label) { c.fillStyle = '#fff'; c.font = 'bold 11px Georgia,serif'; c.fillText(label, p.x, p.y + 1); }
-  });
+    const h = TILE / 2;
 
+    c.save();
+    c.translate(p.x, p.y);
+    c.rotate(tileAngle(i));
+
+    // Чулуун гадаргуу: харанхуй градиент + хагарлын толбо
+    const sg = c.createLinearGradient(0, -h, 0, h);
+    sg.addColorStop(0, '#332a42'); sg.addColorStop(1, '#120b1a');
+    c.fillStyle = sg;
+    c.fillRect(-h, -h, TILE, TILE);
+    for (let j = 0; j < 3; j++) {
+      c.fillStyle = 'rgba(0,0,0,0.35)';
+      c.fillRect(-h + r() * (TILE - 6), -h + r() * (TILE - 6), 3 + r() * 3, 1.5);
+    }
+
+    // Гэрэлтэй ирмэг: бүх нүдэнд бүдэг, тусгай нүдэнд тод
+    c.strokeStyle = gl ? `rgba(${gl},0.95)` : '#5b4d70';
+    c.lineWidth = gl ? 2 : 1.2;
+    c.shadowColor = gl ? `rgba(${gl},0.9)` : 'rgba(154,92,255,0.35)';
+    c.shadowBlur = gl ? 10 : 4;
+    c.strokeRect(-h + 1, -h + 1, TILE - 2, TILE - 2);
+    c.restore();
+
+    const label = i === 0 ? 'S' : TILE_LABEL[k];
+    if (label) {
+      c.fillStyle = '#fff';
+      c.font = `bold ${Math.round(TILE * 0.3)}px Georgia,serif`;
+      c.fillText(label, p.x, p.y + 1);
+    }
+  });
   // Гарц: гэрэлтэй хаалга
   gate(c, BOARD_PTS[LAST].x, BOARD_PTS[LAST].y);
 
@@ -523,6 +605,14 @@ function buildScene() {
   vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.55)');
   c.fillStyle = vg; c.fillRect(0, 0, WORLD.w, WORLD.h);
   return cv;
+}
+
+// Нэг нүдэнд олон дүр байвал төв эргэн тойронд жигд байрлуулна
+function slotOf(idx, n) {
+  if (n <= 1) return { dx: 0, dy: 0, k: 1 };
+  const r = TILE * 0.24;
+  const a = n === 2 ? idx * Math.PI : -Math.PI / 2 + idx * TAU / n;
+  return { dx: Math.cos(a) * r, dy: Math.sin(a) * r, k: 0.6 };
 }
 
 function drawBoard() {
@@ -534,21 +624,36 @@ function drawBoard() {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
+  const cellOf = pl => Math.round(VIS[pl.id] ?? pl.pos);
+
   G.players.forEach((pl, i) => {
-    const base = pointAt(VIS[pl.id] ?? pl.pos);
-    const x = base.x + OFF[i][0];
-    const y = base.y + OFF[i][1] + 10;
+    const cell = cellOf(pl);
+    const sharers = G.players.filter(q => cellOf(q) === cell);
+    const slot = slotOf(sharers.indexOf(pl), sharers.length);
+    const center = pointAt(VIS[pl.id] ?? pl.pos);     // нүдний яг төв
+    const cx = center.x + slot.dx, cy = center.y + slot.dy;
+    const k = PIECE_K * slot.k;
+    const [ax, ay] = AVATAR_CENTER[pl.avatar];
+
     if (i === G.cur && G.status === 'playing') {
-      ctx.beginPath(); ctx.arc(x, y - 10, 17, 0, TAU);
-      ctx.strokeStyle = '#fff'; ctx.setLineDash([3, 3]); ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(cx, cy, 27 * k + 3, 0, TAU);
+      ctx.strokeStyle = '#fff'; ctx.setLineDash([3, 3]); ctx.lineWidth = 1.5;
       ctx.stroke(); ctx.setLineDash([]);
     }
-    DRAW[pl.avatar](ctx, x, y, 0.9);
-    ctx.font = 'bold 11px Georgia,serif';
+
+    // Дүрсийн хайрцгийн төвийг (cx, cy)-д таарууллаа
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(k, k);
+    DRAW[pl.avatar](ctx, -ax, -ay, 1);
+    ctx.restore();
+
+    ctx.font = `bold ${sharers.length > 1 ? 9 : 11}px Georgia,serif`;
     ctx.lineWidth = 3; ctx.strokeStyle = '#000';
-    ctx.strokeText(pl.name, x, y - 36);
+    const ty = cy - 27 * k - 6;
+    ctx.strokeText(pl.name, cx, ty);
     ctx.fillStyle = pl.color;
-    ctx.fillText(pl.name, x, y - 36);
+    ctx.fillText(pl.name, cx, ty);
   });
 }
 const ART = (() => {
@@ -956,7 +1061,7 @@ const TILE_COLOR = {
   plain: '#2a2238', fwd4: '#1f6b4a', fwd5: '#1f6b4a', roll: '#2d5a8c',
   back2: '#7a2a30', back3: '#7a2a30', jail: '#4a2a5a'
 };
-const TILE_LABEL = { fwd4: '+4', fwd5: '+5', roll: '↻', back2: '?', back3: '?', jail: 'Г' };
+const TILE_LABEL = { fwd2: '+2', fwd3: '+3', fwd4: '+4', fwd5: '+5', roll: '↻', back2: '?', back3: '?', jail: 'Г', dare: '!' };
 const WRONG_MSG = ['Азгүй тахиа', 'Мундаг ч амьтан болдоо', 'Ишш чааваасдаа', 'Юм авцаан', 'Гажраа гажраа'];
 const GOOD_MSG = ['Баяр хүргэе заваан амьтан минь', 'Чи ч самуурсан эм юм аа', 'hot baby', 'Муугүй л юм'];
 
@@ -1044,13 +1149,16 @@ function rollP(G, a, b) {
   if (p.pos >= LAST) { winP(s, p); return s; }
 
   switch (BOARD_KINDS[p.pos]) {
-    case 'plain':
+       case 'plain':
+    case 'dare':
       nextTurn(s, note);
       break;
 
+    case 'fwd2':
+    case 'fwd3':
     case 'fwd4':
     case 'fwd5': {
-      const want = BOARD_KINDS[p.pos] === 'fwd4' ? 4 : 5;
+      const want = { fwd2: 2, fwd3: 3, fwd4: 4, fwd5: 5 }[BOARD_KINDS[p.pos]];
       const steps = Math.min(want, 10 - s.bonus); // бонус урагшлал нэг ээлжид хамгийн ихдээ 10
       if (steps <= 0) { nextTurn(s, note + ' · Бонусын хязгаар дууссан'); break; }
       s.bonus += steps;
@@ -1171,13 +1279,12 @@ function spinFrames() {
   ];
 }
 
-// Шоо: гарч ирэх → эргэлдэх → үр дүн → жижгэрч алга болох
+// Шоо: гарч ирэх → эргэлдэх → зогсох → алга болох → мэдэгдэл → дараа нь дүр нүүнэ
 async function playDice(dice) {
-  const ov = $('rollOverlay'), box = $('rollDice'), msg = $('rollMsg');
+  const ov = $('rollOverlay'), box = $('rollDice');
   let flicker = null, spins = [];
   box.innerHTML = `<div class="die">${dieSVG(1)}</div><div class="die">${dieSVG(1)}</div>`;
   const dies = [...box.querySelectorAll('.die')];
-  msg.textContent = '';
   ov.hidden = false;
   try {
     // 1. Гарч ирэх
@@ -1186,7 +1293,7 @@ async function playDice(dice) {
       { duration: APPEAR_MS, easing: 'cubic-bezier(.2,.8,.2,1)' }
     ).finished));
 
-    // 2. Эргэлдэж, үсэрч, аажим удаашрана. Түр тоо харуулна.
+    // 2. Эргэлдэж, зогсоно
     flicker = setInterval(() => {
       box.querySelectorAll('text').forEach(t => { t.textContent = rollDie(); });
     }, 80);
@@ -1194,12 +1301,11 @@ async function playDice(dice) {
     await Promise.all(spins.map(s => s.finished));
     clearInterval(flicker); flicker = null;
 
-    // 3. Эцсийн үр дүн: тоглоомд ашиглагдах утгатай яг таарна
+    // 3. Эцсийн тоо (тоглоомын үнэн утгатай яг таарна)
     dies.forEach((d, i) => { d.innerHTML = dieSVG(dice[i]); });
-    msg.textContent = `${dice[0]} + ${dice[1]} = ${dice[0] + dice[1]}`;
-    await sleep(RESULT_MS);
+    await sleep(300);
 
-    // 4. Жижигрээд бүрэн алга болно
+    // 4. Шоо бүрэн алга болно
     spins.forEach(s => s.cancel());
     spins = [];
     await Promise.all(dies.map(d => d.animate(
@@ -1207,12 +1313,54 @@ async function playDice(dice) {
       { duration: VANISH_MS, easing: 'ease-in', fill: 'forwards' }
     ).finished));
   } finally {
-    // Алдаа гарсан ч шооны цонх бүрэн нуугдаж, төлөв цэвэрлэгдэнэ
     if (flicker) clearInterval(flicker);
     spins.forEach(s => s.cancel());
     box.innerHTML = '';
-    msg.textContent = '';
     ov.hidden = true;
+  }
+
+  // 5–8. Мэдэгдэл гарч ирж, харагдаад, алга болтол хүлээнэ
+  await showNotice(dice);
+}
+
+// Мэдэгдлийн карт: 1.6 секунд харуулаад жижгэрч алга болно
+function showNotice(dice) {
+  return new Promise(resolve => {
+    const box = $('diceNotice'), card = box.querySelector('.dn-card');
+    $('dnA').textContent = dice[0];
+    $('dnB').textContent = dice[1];
+    $('dnSum').textContent = dice[0] + dice[1];
+    spawnSparks(card);
+
+    card.classList.remove('show', 'hide');
+    box.hidden = false;
+    void card.offsetWidth;            // анимацийг дахин эхлүүлэх
+    card.classList.add('show');
+
+    setTimeout(() => {
+      card.classList.remove('show');
+      card.classList.add('hide');
+      setTimeout(() => {
+        box.hidden = true;
+        card.classList.remove('hide');
+        resolve();
+      }, 400);
+    }, 1600);
+  });
+}
+
+// Ид шидийн тоосонцор (CSS хувьсагчаар чиглэлийг өгнө)
+function spawnSparks(card) {
+  card.querySelectorAll('.dn-spark').forEach(s => s.remove());
+  for (let i = 0; i < 18; i++) {
+    const s = document.createElement('i');
+    const a = Math.random() * Math.PI * 2, d = 90 + Math.random() * 110;
+    s.className = 'dn-spark';
+    s.style.setProperty('--dx', Math.cos(a) * d + 'px');
+    s.style.setProperty('--dy', Math.sin(a) * d + 'px');
+    s.style.animationDelay = (Math.random() * 0.25) + 's';
+    s.style.background = Math.random() < 0.6 ? '#7cff9a' : '#c9a8ff';
+    card.appendChild(s);
   }
 }
 
@@ -1527,15 +1675,7 @@ for (let i = 0; i < 250; i++) {
 // Даалгаврын мэдээлэл
 const TILE_TASK = BOARD_KINDS.map((k, i) => {
   const t = TASKS[k];
-
-  return {
-    kind: k,
-    type: t.type,
-    title: t.title,
-    text: k === 'dare'
-      ? DARES[i % DARES.length]
-      : t.text
-  };
+  return { kind: k, type: t.type, title: t.title, text: k === 'dare' ? DARES[i % DARES.length] : t.text };
 });
 
 </script>
